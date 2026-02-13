@@ -1,5 +1,14 @@
 # Secrets and local environment
 mqtt_tinygs_listen.env
+*.env
+!.env.example
+!*.env.example
+*.pem
+*.crt
+*.cer
+*.key
+*.p12
+*.pfx
 
 # Python cache
 __pycache__/

@@ -88,6 +88,8 @@ INFLUXDB_BUCKET=tinygs
 INFLUXDB_TOKEN=your-token
 INFLUXDB_MEAS_FRAME=tinygs_frame
 INFLUXDB_MEAS_STATE=tinygs_state
+# Optional custom CA bundle for MQTT TLS (when unset, system trust store is used)
+TINYGS_CAFILE=/path/to/ca-bundle.pem
 ```
 
 Then restart listener:

@@ -333,7 +333,7 @@ def main() -> None:
     ap.add_argument("--port", type=int, default=8883)
     ap.add_argument("--user", required=True)
     ap.add_argument("--password", default=os.getenv("TINYGS_PASS"))
-    ap.add_argument("--cafile", default="tinygs-ca-bundle.pem")
+    ap.add_argument("--cafile", default=os.getenv("TINYGS_CAFILE"), help="Optional path to CA bundle PEM")
     ap.add_argument("--station", default="KNA0047Rotator")
     ap.add_argument("--state-topic", default=None, help="Override state topic (default: tinygs/<user>/<station>/cmnd/begine)")
     ap.add_argument("--frame-topic", default=None, help="Override frame topic (default: tinygs/<user>/<station>/cmnd/frame/0)")
@@ -442,7 +442,10 @@ def main() -> None:
 
     client = make_client(client_id=f"tinygs-json-{int(time.time())}")
     client.username_pw_set(args.user, args.password)
-    client.tls_set(ca_certs=args.cafile)
+    if args.cafile:
+        client.tls_set(ca_certs=args.cafile)
+    else:
+        client.tls_set()
     client.tls_insecure_set(False)
 
     def on_connect(client, userdata, flags, reason_code, properties=None):
