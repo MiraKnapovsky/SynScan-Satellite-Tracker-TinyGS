@@ -29,7 +29,7 @@ This project tracks satellites with a SynScan mount, using TinyGS MQTT state upd
 Install Python dependencies:
 
 ```bash
-python3 -m pip install flask paho-mqtt pyserial requests skyfield
+python3 -m pip install flask paho-mqtt pyserial requests skyfield influxdb-client
 ```
 
 ## Quick Start
@@ -70,6 +70,41 @@ python3 synscan_web.py
 ```
 
 Open `http://<host>:8080/config`.
+
+## InfluxDB + Grafana
+
+`mqtt_tinygs_listen.py` can write directly to InfluxDB v2 (optional):
+
+- Measurement `tinygs_state`: data from topic `cmnd/begine` (mode, freq, bw, sf, cr, NORAD, ...).
+- Measurement `tinygs_frame`: data from topic `cmnd/frame/0` (satellite, RSSI, SNR, freq error, confirmed/crc_error).
+
+Configuration is via env vars (already loaded by `mqtt_tinygs_listen.service`):
+
+```bash
+# /home/student/01diplomka/mqtt_tinygs_listen.env
+INFLUXDB_URL=http://127.0.0.1:8086
+INFLUXDB_ORG=your-org
+INFLUXDB_BUCKET=tinygs
+INFLUXDB_TOKEN=your-token
+INFLUXDB_MEAS_FRAME=tinygs_frame
+INFLUXDB_MEAS_STATE=tinygs_state
+```
+
+Then restart listener:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart mqtt_tinygs_listen.service
+sudo systemctl status mqtt_tinygs_listen.service
+```
+
+Grafana setup:
+
+1. Add data source `InfluxDB` (Flux or InfluxQL according to your Influx setup).
+2. Select bucket `tinygs` (or your custom bucket).
+3. Build panels from:
+   - `tinygs_frame`: `rssi_db`, `snr_db`, `freq_error_hz`, `confirmed`, `crc_error` by `satellite`.
+   - `tinygs_state`: `freq`, `bw`, `sf`, `cr` by `satellite`.
 
 ## `synscan_config.json` Keys
 

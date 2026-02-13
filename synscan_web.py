@@ -1,0 +1,566 @@
+#!/usr/bin/env python3
+import json
+import os
+import subprocess
+from pathlib import Path
+from typing import Any, Dict
+from flask import Flask, request, redirect, url_for, jsonify, render_template_string, Response
+from synscan_common import goto_azel, open_port, send_cmd, transform_el
+
+app = Flask(__name__)
+
+BASE_DIR = Path(__file__).resolve().parent
+CONFIG = BASE_DIR / "synscan_config.json"
+STATUS = BASE_DIR / "synscan_status.json"
+STATE  = BASE_DIR / "state.json"
+
+SERVICE = "synscan-follow-sat.service"
+# If SYNSCAN_WEB_USER is empty, only password is checked (backward compatible).
+WEB_USER = os.getenv("SYNSCAN_WEB_USER", "").strip()
+WEB_PASSWORD = os.getenv("SYNSCAN_WEB_PASSWORD", "student")
+
+TEMPLATE = r"""
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>SynScan</title>
+  <style>
+    body { font-family: sans-serif; max-width: 980px; margin: 40px auto; }
+    .card { padding: 14px; border: 1px solid #ddd; border-radius: 12px; margin: 14px 0; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .btn { display:inline-block; padding:10px 14px; border:1px solid #ccc; border-radius:10px; text-decoration:none; color:#111; background:#f8f8f8; }
+    .btn:hover { background:#f0f0f0; }
+    .danger { border-color:#d88; background:#fff3f3; }
+    code { background:#f5f5f5; padding:2px 6px; border-radius:6px; }
+    input, select { padding: 8px; border-radius: 8px; border: 1px solid #ccc; }
+    label { display:block; margin-top: 10px; font-weight: 600; }
+    .small { color:#666; font-size: 0.92em; }
+    .kv { display:grid; grid-template-columns: 180px 1fr; gap: 6px 12px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+  </style>
+</head>
+<body>
+  <h1>SynScan follow sat</h1>
+
+  <div class="card">
+    <h2>Status (tracker)</h2>
+    <div class="small" id="summary">?</div>
+    <div class="kv" style="margin-top:10px;">
+      <div><b>Služba</b></div><div><span id="svc">?</span> / <span id="en">?</span></div>
+      <div><b>Režim</b></div><div id="ph">?</div>
+      <div><b>Cíl</b></div><div id="tgt">?</div>
+      <div><b>Az / El </b></div><div><span id="az">?</span>° / <span id="el">?</span>°</div>
+      <div><b>Stavová zpráva</b></div><div id="msg" class="mono">?</div>
+      <div><b>Poslední update</b></div><div id="ts">?</div>
+      <div><b>Poslední příkaz</b></div><div><span id="cmd" class="mono">?</span> <span id="cmdts" class="small"></span></div>
+    </div>
+
+    <div class="row" style="margin-top:12px;">
+      <a class="btn" href="/svc/start">Start</a>
+      <a class="btn danger" href="/svc/stop">Stop</a>
+      <a class="btn" href="/svc/restart">Restart</a>
+      <a class="btn" href="/logs">Logs</a>
+    </div>
+
+    <div class="small" style="margin-top:8px;">
+      Tracker zapisuje <code>{{ base_dir }}/synscan_status.json</code>.
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>State (TinyGS/MQTT)</h2>
+    <div class="small" id="state_summary">?</div>
+    <div class="kv" style="margin-top:10px;">
+      <div><b>Satelit</b></div><div id="st_sat">?</div>
+      <div><b>NORAD</b></div><div id="st_norad">?</div>
+      <div><b>Poslední update</b></div><div id="st_last">?</div>
+      <div><b>Frekvence / režim</b></div><div><span id="st_freq">?</span> MHz / <span id="st_mode">?</span></div>
+      <div><b>BW / SF / CR</b></div><div><span id="st_bw">?</span> kHz / <span id="st_sf">?</span> / <span id="st_cr">?</span></div>
+      <div><b>PL / PWR / gain</b></div><div><span id="st_pl">?</span> / <span id="st_pwr">?</span> / <span id="st_gain">?</span></div>
+      <div><b>CRC / iIQ / fldro</b></div><div><span id="st_crc">?</span> / <span id="st_iIQ">?</span> / <span id="st_fldro">?</span></div>
+      <div><b>CL / SW</b></div><div><span id="st_cl">?</span> / <span id="st_sw">?</span></div>
+    </div>
+
+    <div class="small" style="margin-top:8px;">
+      Čte <code>{{ base_dir }}/state.json</code>.
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Konfigurace (synscan_config.json)</h2>
+    <form method="post">
+      <label>dummy (test bez montáže)</label>
+      <input type="checkbox" name="dummy" {% if c.get('dummy') %}checked{% endif %}>
+
+      <label>port (RS-232 zařízení, např. /dev/ttyUSB0)</label>
+      <input name="port" style="width:420px" value="{{ c.get('port','/dev/ttyUSB0') }}">
+
+      <label>lat (zeměpisná šířka)</label>
+      <input name="lat" value="{{ c.get('lat',49.83) }}">
+
+      <label>lon (zeměpisná délka)</label>
+      <input name="lon" value="{{ c.get('lon',18.17) }}">
+
+      <label>alt (nadmořská výška v m)</label>
+      <input name="alt" value="{{ c.get('alt',240) }}">
+
+      <label>tle (soubor s TLE)</label>
+      <input name="tle" style="width:520px" value="{{ c.get('tle', base_dir + '/satellites.tle') }}">
+
+      <label>mode (výběr cíle)</label>
+      <select name="mode">
+        <option value="state" {% if c.get('mode','state')=='state' %}selected{% endif %}>state</option>
+        <option value="max"   {% if c.get('mode')=='max' %}selected{% endif %}>max</option>
+        <option value="name"  {% if c.get('mode')=='name' %}selected{% endif %}>name</option>
+      </select>
+
+      <label>state (state.json pro režim state)</label>
+      <input name="state" style="width:520px" value="{{ c.get('state', base_dir + '/state.json') }}">
+
+      <label>min_el (min. elevace pro tracking)</label>
+      <input name="min_el" value="{{ c.get('min_el',10) }}">
+
+      <label>interval (perioda výpočtu/příkazů v s)</label>
+      <input name="interval" value="{{ c.get('interval',0.5) }}">
+
+      <label>lead (predikční náskok v s)</label>
+      <input name="lead" value="{{ c.get('lead',0.8) }}">
+
+      <label>wrap_limit (kabelový limit azimut +/- °)</label>
+      <input name="wrap_limit" value="{{ c.get('wrap_limit',270.0) }}">
+
+      <label>wrap_margin (rezerva k wrap_limit v °)</label>
+      <input name="wrap_margin" value="{{ c.get('wrap_margin',10.0) }}">
+
+      <label>plan_horizon (horizont predikce přeletu v s)</label>
+      <input name="plan_horizon" value="{{ c.get('plan_horizon',2400.0) }}">
+
+      <label>plan_step (krok predikce v s)</label>
+      <input name="plan_step" value="{{ c.get('plan_step',2.0) }}">
+
+      <label>az_home (bezpečný azimut pro odmotání)</label>
+      <input name="az_home" value="{{ c.get('az_home',0.0) }}">
+
+      <label>status_file (kam tracker zapisuje status)</label>
+      <input name="status_file" style="width:520px" value="{{ c.get('status_file', base_dir + '/synscan_status.json') }}">
+
+      <label>status_every (perioda zápisu statusu v s)</label>
+      <input name="status_every" value="{{ c.get('status_every',1.0) }}">
+
+      <div class="row" style="margin-top:14px;">
+        <button class="btn" type="submit">Uložit + restart služby</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Manuální ovládání rotátoru</h2>
+    <div class="small">Doporučeno: nejdřív zastavit službu, aby si nepřepisovala příkazy.</div>
+    <div class="kv" style="margin-top:10px;">
+      <div><b>Aktuální Az / El</b></div>
+      <div><span id="cur_az">?</span>° / <span id="cur_el">?</span>° (montáž: <span id="cur_elm">?</span>°)</div>
+      <div><b>Az (uživatel)</b></div>
+      <div><input id="man_az" type="number" step="0.1" placeholder="0–360" disabled></div>
+      <div><b>El (uživatel)</b></div>
+      <div><input id="man_el" type="number" step="0.1" placeholder="0–90" disabled></div>
+      <div><b>Výsledek</b></div>
+      <div id="man_out" class="mono">-</div>
+    </div>
+    <div class="row" style="margin-top:12px;">
+      <button class="btn" type="button" onclick="toggleManual()">Odemknout zadávání</button>
+      <button class="btn" type="button" onclick="manualSend()">Poslat na montáž</button>
+      <button class="btn danger" type="button" onclick="manualStop()">Stop</button>
+    </div>
+  </div>
+
+  <script>
+    function setText(id, v){
+      document.getElementById(id).textContent = (v === undefined || v === null || v === "") ? "-" : v;
+    }
+
+    function setNum(id, v, decimals){
+      if(v === undefined || v === null || v === ""){
+        setText(id, v);
+        return;
+      }
+      const n = Number(v);
+      if(Number.isNaN(n)){
+        setText(id, v);
+        return;
+      }
+      setText(id, n.toFixed(decimals));
+    }
+
+    function statusSummary(svc, s){
+      if(!svc || svc.active !== 'active'){
+        return 'Služba neběží. Tracker neposílá příkazy na montáž.';
+      }
+      if(!s){
+        return 'Služba běží, ale zatím není vytvořený synscan_status.json.';
+      }
+      if(s.do_center){
+        return 'Centruji montáž na výchozí pozici.';
+      }
+      if(s.tracked_name){
+        return 'Sleduji satelit: ' + s.tracked_name + '.';
+      }
+      return 'Služba běží, čekám na cíl.';
+    }
+
+    function parseLastUpdateTime(t){
+      if(!t || typeof t !== 'string') return null;
+      const m = t.match(/^(\d{1,2}):(\d{2}):(\d{2})$/);
+      if(!m) return null;
+      const now = new Date();
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), Number(m[1]), Number(m[2]), Number(m[3]));
+      if(d.getTime() - now.getTime() > 5 * 60 * 1000){
+        d.setDate(d.getDate() - 1);
+      }
+      return d;
+    }
+
+    function stateSummary(s){
+      if(!s){
+        return 'state.json nenalezen nebo prázdný.';
+      }
+      const sat = s.sat ? s.sat : '(bez satelitu)';
+      const freq = (s.freq !== undefined && s.freq !== null) ? (s.freq + ' MHz') : '-';
+      const mode = s.mode ? s.mode : '-';
+      const last = s.last_update ? s.last_update : '-';
+      let extra = '';
+      const t = parseLastUpdateTime(s.last_update);
+      if(t){
+        const ageSec = Math.round((Date.now() - t.getTime()) / 1000);
+        if(ageSec >= 120){
+          extra = ' POZOR: update stare (' + ageSec + ' s).';
+        }
+      }
+      return 'TinyGS: ' + sat + ', ' + freq + ' / ' + mode + ', update: ' + last + '.' + extra;
+    }
+
+    function toggleManual(){
+      const az = document.getElementById('man_az');
+      const el = document.getElementById('man_el');
+      const nowLocked = !az.disabled;
+      az.disabled = nowLocked;
+      el.disabled = nowLocked;
+    }
+
+    async function manualSend(){
+      const az = document.getElementById('man_az').value;
+      const el = document.getElementById('man_el').value;
+      try{
+        const r = await fetch('/api/manual/goto', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({az: az, el: el}),
+        });
+        const j = await r.json();
+        if(!r.ok || !j.ok){
+          setText('man_out', j.error || 'Chyba.');
+          return;
+        }
+        const out = 'Zadané: Az ' + j.az_user + '°, El ' + j.el_user + '° | Posláno: Az ' + j.az_send + '°, El ' + j.el_send + '°';
+        setText('man_out', out);
+      }catch(e){
+        setText('man_out', 'Chyba při odeslání.');
+      }
+    }
+
+    async function manualStop(){
+      try{
+        const r = await fetch('/api/manual/stop', {method: 'POST'});
+        const j = await r.json();
+        if(!r.ok || !j.ok){
+          setText('man_out', j.error || 'Chyba.');
+          return;
+        }
+        setText('man_out', 'Stop odeslán.');
+      }catch(e){
+        setText('man_out', 'Chyba při odeslání stop.');
+      }
+    }
+
+    async function refreshStatus(){
+      try{
+        const r = await fetch('/api/status', {cache:'no-store'});
+        const j = await r.json();
+
+        const svc = j.service || {};
+        setText('svc', svc.active || '?');
+        setText('en',  svc.enabled || '?');
+
+        const s = j.status;
+        if(!s){
+          setText('ph','-'); setText('tgt','(zatím žádný synscan_status.json)');
+          setText('az','-'); setText('el','-');
+          setText('msg','-'); setText('ts','-');
+          setText('cmd','-'); setText('cmdts','');
+          setText('summary', statusSummary(svc, null));
+          return;
+        }
+
+        setText('ph', s.phase ?? '-');
+
+        const tgt = (s.phase === 'no_target') ? '(nic)' : (s.do_center ? '[CENTER]' : (s.tracked_name ? s.tracked_name : '(nic)'));
+        setText('tgt', tgt);
+
+        setNum('az',  s.az_deg, 1);
+        setNum('el',  s.el_user_deg, 1);
+        setNum('cur_az', s.az_deg, 1);
+        setNum('cur_el', s.el_user_deg, 1);
+        setNum('cur_elm', s.el_mount_deg, 1);
+
+        setText('msg', s.message);
+        setText('ts',  s.ts);
+
+        setText('cmd', s.last_cmd);
+        setText('cmdts', s.last_cmd_ts ? ('(' + s.last_cmd_ts + ')') : '');
+        setText('summary', statusSummary(svc, s));
+      }catch(e){
+        setText('svc','ERROR');
+        setText('summary', 'Chyba při načítání statusu.');
+      }
+    }
+
+    async function refreshState(){
+      try{
+        const r = await fetch('/api/state', {cache:'no-store'});
+        const j = await r.json();
+        const s = j.state;
+
+        if(!s){
+          setText('st_sat','(nenalezeno state.json)');
+          setText('st_norad','-');
+          setText('st_last','-');
+          setText('st_freq','-');
+          setText('st_mode','-');
+          setText('st_bw','-');
+          setText('st_sf','-');
+          setText('st_cr','-');
+          setText('st_pl','-');
+          setText('st_pwr','-');
+          setText('st_gain','-');
+          setText('st_crc','-');
+          setText('st_iIQ','-');
+          setText('st_fldro','-');
+          setText('st_cl','-');
+          setText('st_sw','-');
+          setText('state_summary', stateSummary(null));
+          return;
+        }
+
+        setText('st_sat', s.sat);
+        setText('st_norad', s.NORAD);
+        setText('st_last', s.last_update);
+
+        setText('st_freq', s.freq);
+        setText('st_mode', s.mode);
+
+        setText('st_bw', s.bw);
+        setText('st_sf', s.sf);
+        setText('st_cr', s.cr);
+
+        setText('st_pl', s.pl);
+        setText('st_pwr', s.pwr);
+        setText('st_gain', s.gain);
+
+        setText('st_crc', s.crc);
+        setText('st_iIQ', s.iIQ);
+        setText('st_fldro', s.fldro);
+
+        setText('st_cl', s.cl);
+        setText('st_sw', s.sw);
+        setText('state_summary', stateSummary(s));
+      }catch(e){
+        setText('st_sat','ERROR');
+        setText('state_summary', 'Chyba při načítání state.json.');
+      }
+    }
+
+    refreshStatus();
+    refreshState();
+    setInterval(refreshStatus, 1000);
+    setInterval(refreshState, 1000);
+  </script>
+</body>
+</html>
+"""
+
+def sh(cmd: list[str]) -> subprocess.CompletedProcess:
+    return subprocess.run(cmd, text=True, capture_output=True)
+
+def _unauthorized() -> Response:
+    return Response(
+        "Unauthorized",
+        401,
+        {"WWW-Authenticate": 'Basic realm="SynScan"'},
+    )
+
+@app.before_request
+def require_auth():
+    auth = request.authorization
+    if not auth:
+        return _unauthorized()
+    if WEB_USER and auth.username != WEB_USER:
+        return _unauthorized()
+    if auth.password != WEB_PASSWORD:
+        return _unauthorized()
+
+def service_state() -> dict:
+    a = sh(["systemctl", "is-active", SERVICE]).stdout.strip()
+    e = sh(["systemctl", "is-enabled", SERVICE]).stdout.strip()
+    return {"active": a, "enabled": e}
+
+def service_start():
+    sh(["sudo", "systemctl", "start", SERVICE])
+
+def service_stop():
+    sh(["sudo", "systemctl", "stop", SERVICE])
+
+def service_restart():
+    sh(["sudo", "systemctl", "restart", SERVICE])
+
+def atomic_write_json(path: Path, data: dict):
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    os.replace(tmp, path)
+
+def load_cfg():
+    if CONFIG.exists():
+        return json.loads(CONFIG.read_text(encoding="utf-8"))
+    return {}
+
+def load_status():
+    try:
+        return json.loads(STATUS.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+def load_state():
+    try:
+        return json.loads(STATE.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+def _get_port() -> str:
+    cfg = load_cfg()
+    return cfg.get("port") or "/dev/ttyUSB0"
+
+@app.get("/api/status")
+def api_status():
+    return jsonify({"service": service_state(), "status": load_status()})
+
+@app.get("/api/state")
+def api_state():
+    return jsonify({"state": load_state()})
+
+@app.post("/api/manual/goto")
+def api_manual_goto():
+    data = request.get_json(silent=True) or {}
+    try:
+        az_user = float(data.get("az", ""))
+        el_user = float(data.get("el", ""))
+    except Exception:
+        return jsonify({"ok": False, "error": "Neplatné Az/El."}), 400
+
+    try:
+        el_send = transform_el(el_user)
+        with open_port(_get_port()) as ser:
+            cmd, ok = goto_azel(ser, az_user, el_send)
+        if not ok:
+            return jsonify({"ok": False, "error": "Montáž neodpověděla."}), 500
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+    return jsonify({
+        "ok": True,
+        "az_user": round(az_user, 2),
+        "el_user": round(el_user, 2),
+        "az_send": round(az_user, 2),
+        "el_send": round(el_send, 2),
+        "cmd": cmd,
+    })
+
+@app.post("/api/manual/stop")
+def api_manual_stop():
+    try:
+        with open_port(_get_port()) as ser:
+            send_cmd(ser, "M")
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+    return jsonify({"ok": True})
+
+@app.get("/")
+def home():
+    return redirect(url_for("config_get"))
+
+@app.get("/config")
+def config_get():
+    return render_template_string(TEMPLATE, c=load_cfg(), base_dir=str(BASE_DIR))
+
+@app.post("/config")
+def config_post():
+    def f(name, default=None):
+        v = request.form.get(name, "")
+        return v if v != "" else default
+
+    def parse_float_field(name: str, default: float) -> float:
+        raw = f(name, default)
+        try:
+            return float(raw)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"Neplatná hodnota pole '{name}': {raw!r}") from exc
+
+    try:
+        cfg: Dict[str, Any] = {
+            "dummy": (request.form.get("dummy") == "on"),
+            "port": f("port", "/dev/ttyUSB0"),
+            "lat": parse_float_field("lat", 0.0),
+            "lon": parse_float_field("lon", 0.0),
+            "alt": parse_float_field("alt", 0.0),
+            "tle": f("tle", str(BASE_DIR / "satellites.tle")),
+            "mode": f("mode", "state"),
+            "state": f("state", str(BASE_DIR / "state.json")),
+            "min_el": parse_float_field("min_el", 10.0),
+            "interval": parse_float_field("interval", 0.5),
+            "lead": parse_float_field("lead", 0.8),
+            "wrap_limit": parse_float_field("wrap_limit", 270.0),
+            "wrap_margin": parse_float_field("wrap_margin", 10.0),
+            "plan_horizon": parse_float_field("plan_horizon", 2400.0),
+            "plan_step": parse_float_field("plan_step", 2.0),
+            "az_home": parse_float_field("az_home", 0.0),
+            "status_file": f("status_file", str(BASE_DIR / "synscan_status.json")),
+            "status_every": parse_float_field("status_every", 1.0),
+        }
+    except ValueError as exc:
+        return str(exc), 400
+
+    atomic_write_json(CONFIG, cfg)
+    service_restart()
+    return redirect(url_for("config_get"))
+
+@app.get("/svc/start")
+def svc_start():
+    service_start()
+    return redirect(url_for("config_get"))
+
+@app.get("/svc/stop")
+def svc_stop():
+    service_stop()
+    return redirect(url_for("config_get"))
+
+@app.get("/svc/restart")
+def svc_restart():
+    service_restart()
+    return redirect(url_for("config_get"))
+
+@app.get("/logs")
+def logs():
+    r = sh(["journalctl", "-u", SERVICE, "-n", "200", "--no-pager"])
+    text = r.stdout if r.stdout else "(no logs)"
+    return f"<pre>{text}</pre>"
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8080, debug=False)
