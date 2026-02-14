@@ -18,6 +18,9 @@ __pycache__/
 *.tmp
 state.json
 synscan_status.json
+all_rx.jsonl
+raw/raw_messages.jsonl
+confirmed_satellites.json
 
 # Local virtual environments
 tinygs_mqtt/env/
