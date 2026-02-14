@@ -17,7 +17,17 @@ STATE  = BASE_DIR / "state.json"
 SERVICE = "synscan-follow-sat.service"
 # If SYNSCAN_WEB_USER is empty, only password is checked (backward compatible).
 WEB_USER = os.getenv("SYNSCAN_WEB_USER", "").strip()
-WEB_PASSWORD = os.getenv("SYNSCAN_WEB_PASSWORD", "student")
+WEB_PASSWORD = os.getenv("SYNSCAN_WEB_PASSWORD", "").strip()
+if not WEB_PASSWORD:
+    raise SystemExit("Set SYNSCAN_WEB_PASSWORD before starting synscan_web.py")
+if WEB_PASSWORD == "student":
+    raise SystemExit("SYNSCAN_WEB_PASSWORD='student' is blocked; choose a stronger password")
+
+WEB_HOST = os.getenv("SYNSCAN_WEB_HOST", "127.0.0.1").strip() or "127.0.0.1"
+try:
+    WEB_PORT = int(os.getenv("SYNSCAN_WEB_PORT", "8080"))
+except ValueError as exc:
+    raise SystemExit("SYNSCAN_WEB_PORT must be an integer") from exc
 
 TEMPLATE = r"""
 <!doctype html>
@@ -57,9 +67,15 @@ TEMPLATE = r"""
     </div>
 
     <div class="row" style="margin-top:12px;">
-      <a class="btn" href="/svc/start">Start</a>
-      <a class="btn danger" href="/svc/stop">Stop</a>
-      <a class="btn" href="/svc/restart">Restart</a>
+      <form method="post" action="/svc/start" style="display:inline;">
+        <button class="btn" type="submit">Start</button>
+      </form>
+      <form method="post" action="/svc/stop" style="display:inline;">
+        <button class="btn danger" type="submit">Stop</button>
+      </form>
+      <form method="post" action="/svc/restart" style="display:inline;">
+        <button class="btn" type="submit">Restart</button>
+      </form>
       <a class="btn" href="/logs">Logs</a>
     </div>
 
@@ -391,6 +407,12 @@ TEMPLATE = r"""
 def sh(cmd: list[str]) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, text=True, capture_output=True)
 
+def sh_checked(cmd: list[str]) -> None:
+    result = sh(cmd)
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip()
+        raise RuntimeError(detail or f"Command failed: {' '.join(cmd)}")
+
 def _unauthorized() -> Response:
     return Response(
         "Unauthorized",
@@ -414,13 +436,13 @@ def service_state() -> dict:
     return {"active": a, "enabled": e}
 
 def service_start():
-    sh(["sudo", "systemctl", "start", SERVICE])
+    sh_checked(["sudo", "systemctl", "start", SERVICE])
 
 def service_stop():
-    sh(["sudo", "systemctl", "stop", SERVICE])
+    sh_checked(["sudo", "systemctl", "stop", SERVICE])
 
 def service_restart():
-    sh(["sudo", "systemctl", "restart", SERVICE])
+    sh_checked(["sudo", "systemctl", "restart", SERVICE])
 
 def atomic_write_json(path: Path, data: dict):
     tmp = path.with_suffix(".tmp")
@@ -538,22 +560,34 @@ def config_post():
         return str(exc), 400
 
     atomic_write_json(CONFIG, cfg)
-    service_restart()
+    try:
+        service_restart()
+    except RuntimeError as exc:
+        return f"Konfigurace uložena, ale restart služby selhal: {exc}", 500
     return redirect(url_for("config_get"))
 
-@app.get("/svc/start")
+@app.post("/svc/start")
 def svc_start():
-    service_start()
+    try:
+        service_start()
+    except RuntimeError as exc:
+        return f"Service start failed: {exc}", 500
     return redirect(url_for("config_get"))
 
-@app.get("/svc/stop")
+@app.post("/svc/stop")
 def svc_stop():
-    service_stop()
+    try:
+        service_stop()
+    except RuntimeError as exc:
+        return f"Service stop failed: {exc}", 500
     return redirect(url_for("config_get"))
 
-@app.get("/svc/restart")
+@app.post("/svc/restart")
 def svc_restart():
-    service_restart()
+    try:
+        service_restart()
+    except RuntimeError as exc:
+        return f"Service restart failed: {exc}", 500
     return redirect(url_for("config_get"))
 
 @app.get("/logs")
@@ -563,4 +597,4 @@ def logs():
     return f"<pre>{text}</pre>"
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080, debug=False)
+    app.run(host=WEB_HOST, port=WEB_PORT, debug=False)

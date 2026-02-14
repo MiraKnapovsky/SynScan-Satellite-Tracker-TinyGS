@@ -3,7 +3,7 @@
 This document explains what is in the Grafana dashboard and how each chart is calculated.
 
 Dashboard file:
-- `tinygs-overview.json.tmp`
+- `dashboards/tinygs-overview.json`
 
 Provisioned Grafana target:
 - `/var/lib/grafana/dashboards/tinygs-overview.json`
@@ -188,12 +188,12 @@ Counts can differ between packet panels and pass panels because:
 Recommended workflow:
 
 1. Edit:
-   - `01diplomka/tinygs-overview.json.tmp`
+   - `01diplomka/dashboards/tinygs-overview.json`
 2. Validate JSON:
-   - `python3 -m json.tool 01diplomka/tinygs-overview.json.tmp > /dev/null`
+   - `python3 -m json.tool 01diplomka/dashboards/tinygs-overview.json > /dev/null`
 3. Increment `version` in dashboard JSON.
 4. Deploy to Grafana provisioning path:
-   - `sudo cp 01diplomka/tinygs-overview.json.tmp /var/lib/grafana/dashboards/tinygs-overview.json`
+   - `sudo cp 01diplomka/dashboards/tinygs-overview.json /var/lib/grafana/dashboards/tinygs-overview.json`
 5. Refresh Grafana dashboard page.
 
 ## 9) Quick Troubleshooting

@@ -1,0 +1,6 @@
+flask
+paho-mqtt
+pyserial
+requests
+skyfield
+influxdb-client

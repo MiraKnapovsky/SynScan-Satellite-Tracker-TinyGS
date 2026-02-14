@@ -29,7 +29,7 @@ This project tracks satellites with a SynScan mount, using TinyGS MQTT state upd
 Install Python dependencies:
 
 ```bash
-python3 -m pip install flask paho-mqtt pyserial requests skyfield influxdb-client
+python3 -m pip install -r requirements.txt
 ```
 
 ## Quick Start
@@ -66,10 +66,14 @@ python3 synscan_runner.py
 
 ```bash
 export SYNSCAN_WEB_PASSWORD=change-me
+# optional:
+# export SYNSCAN_WEB_USER=admin
+# export SYNSCAN_WEB_HOST=127.0.0.1
+# export SYNSCAN_WEB_PORT=8080
 python3 synscan_web.py
 ```
 
-Open `http://<host>:8080/config`.
+By default it binds only to localhost: `http://127.0.0.1:8080/config`.
 
 ## InfluxDB + Grafana
 
@@ -88,6 +92,7 @@ INFLUXDB_BUCKET=tinygs
 INFLUXDB_TOKEN=your-token
 INFLUXDB_MEAS_FRAME=tinygs_frame
 INFLUXDB_MEAS_STATE=tinygs_state
+INFLUXDB_MEAS_META=tinygs_meta
 # Optional custom CA bundle for MQTT TLS (when unset, system trust store is used)
 TINYGS_CAFILE=/path/to/ca-bundle.pem
 ```
@@ -130,8 +135,10 @@ Detailed dashboard documentation:
 
 `synscan_web.py` uses HTTP Basic Auth:
 
-- `SYNSCAN_WEB_PASSWORD`: password (default: `student`).
+- `SYNSCAN_WEB_PASSWORD`: required password (no insecure default).
 - `SYNSCAN_WEB_USER`: optional username. If empty, only password is checked.
+- `SYNSCAN_WEB_HOST`: optional bind host (default: `127.0.0.1`).
+- `SYNSCAN_WEB_PORT`: optional bind port (default: `8080`).
 
 ## Services
 
