@@ -139,9 +139,3 @@ Detailed dashboard documentation:
 If you use service mode, ensure this unit exists and runs `python3 synscan_runner.py`.
 
 `mqtt_tinygs_listen.service` is already present in this directory for the TinyGS listener.
-
-## Notes
-
-- In `mode=state`, tracker target comes from `state.json` fields `NORAD` and/or `sat`.
-- `synscan_status.json` is the main file consumed by the web status panel.
-- Keep credentials out of version control (prefer environment files with restricted permissions).
