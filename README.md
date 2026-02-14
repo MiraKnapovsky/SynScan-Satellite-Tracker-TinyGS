@@ -108,6 +108,10 @@ Grafana setup:
    - `tinygs_frame`: `rssi_db`, `snr_db`, `freq_error_hz`, `confirmed`, `crc_error` by `satellite`.
    - `tinygs_state`: `freq`, `bw`, `sf`, `cr` by `satellite`.
 
+Detailed dashboard documentation:
+
+- `README_GRAFANA.md`
+
 ## `synscan_config.json` Keys
 
 - `dummy`: `true` to log commands only (no serial writes).

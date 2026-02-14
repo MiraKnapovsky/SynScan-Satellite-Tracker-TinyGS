@@ -5,6 +5,7 @@ import json
 import math
 import os
 import re
+import ssl
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -169,6 +170,54 @@ def normalize_sat_name(name: str) -> str:
     text = NAME_NORMALIZE_RE.sub("-", text)
     text = re.sub(r"-+", "-", text).strip("-")
     return text
+
+
+def sat_dedupe_key(name: str) -> str:
+    normalized = normalize_sat_name(name)
+    if normalized:
+        return normalized
+    return name.strip().casefold()
+
+
+def load_confirmed_catalog(path: str) -> Dict[str, str]:
+    catalog: Dict[str, str] = {}
+    p = Path(path)
+    if not p.exists():
+        return catalog
+
+    try:
+        raw = json.loads(p.read_text(encoding="utf-8"))
+    except Exception as e:
+        print(f"[WARN] Failed to read confirmed catalog {path}: {e}")
+        return catalog
+
+    satellites: List[str] = []
+    if isinstance(raw, dict) and isinstance(raw.get("satellites"), list):
+        satellites = [str(x) for x in raw["satellites"] if isinstance(x, str)]
+    elif isinstance(raw, list):
+        satellites = [str(x) for x in raw if isinstance(x, str)]
+
+    for sat in satellites:
+        name = sat.strip()
+        if not name:
+            continue
+        key = sat_dedupe_key(name)
+        if key and key not in catalog:
+            catalog[key] = name
+
+    return catalog
+
+
+def save_confirmed_catalog(path: str, catalog: Dict[str, str]) -> None:
+    names = sorted(catalog.values(), key=lambda x: x.casefold())
+    atomic_write_json(
+        path,
+        {
+            "updated_utc": datetime.now(timezone.utc).isoformat(),
+            "count": len(names),
+            "satellites": names,
+        },
+    )
 
 
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -346,7 +395,25 @@ def main() -> None:
     ap.add_argument("--influx-token", default=os.getenv("INFLUXDB_TOKEN"), help="InfluxDB API token")
     ap.add_argument("--influx-measurement-frame", default=os.getenv("INFLUXDB_MEAS_FRAME", "tinygs_frame"))
     ap.add_argument("--influx-measurement-state", default=os.getenv("INFLUXDB_MEAS_STATE", "tinygs_state"))
+    ap.add_argument("--influx-measurement-meta", default=os.getenv("INFLUXDB_MEAS_META", "tinygs_meta"))
     ap.add_argument("--influx-timeout-ms", type=int, default=int(os.getenv("INFLUXDB_TIMEOUT_MS", "10000")))
+    ap.add_argument(
+        "--confirmed-catalog-out",
+        default=os.getenv("TINYGS_CONFIRMED_CATALOG_OUT", "/home/student/01diplomka/confirmed_satellites.json"),
+        help="Persistent JSON list of unique satellites seen with CONFIRMED decode",
+    )
+    ap.add_argument(
+        "--frame-dedupe-window-s",
+        type=float,
+        default=float(os.getenv("TINYGS_FRAME_DEDUPE_WINDOW_S", "5")),
+        help="Drop duplicate frame packets from same satellite received within this many seconds (0 disables)",
+    )
+    ap.add_argument(
+        "--max-slant-range-km",
+        type=float,
+        default=float(os.getenv("TINYGS_MAX_SLANT_RANGE_KM", "5000")),
+        help="Drop frame packets with computed slant range above this value (0 disables)",
+    )
     ap.add_argument("--tle-file", default=os.getenv("TINYGS_TLE_FILE", "/home/student/01diplomka/satellites.tle"))
     ap.add_argument(
         "--gateway-config",
@@ -361,6 +428,10 @@ def main() -> None:
 
     if not args.password:
         raise SystemExit("Chybi heslo: dej --password nebo exportuj TINYGS_PASS")
+    if args.frame_dedupe_window_s < 0:
+        raise SystemExit("--frame-dedupe-window-s must be >= 0")
+    if args.max_slant_range_km < 0:
+        raise SystemExit("--max-slant-range-km must be >= 0")
 
     state_topic = args.state_topic or f"tinygs/{args.user}/{args.station}/cmnd/begine"
     frame_topic = args.frame_topic or f"tinygs/{args.user}/{args.station}/cmnd/frame/0"
@@ -368,8 +439,15 @@ def main() -> None:
 
     ensure_parent_dir(args.out)
     ensure_parent_dir(args.rx_out)
+    ensure_parent_dir(args.confirmed_catalog_out)
     if args.raw_dir:
         Path(args.raw_dir).mkdir(parents=True, exist_ok=True)
+
+    confirmed_catalog = load_confirmed_catalog(args.confirmed_catalog_out)
+    print(
+        f"[CATALOG] Loaded unique CONFIRMED satellites: {len(confirmed_catalog)} "
+        f"({args.confirmed_catalog_out})"
+    )
 
     gateway_lat = args.gateway_lat
     gateway_lon = args.gateway_lon
@@ -440,10 +518,75 @@ def main() -> None:
         except Exception as e:
             print(f"[WARN] InfluxDB write failed: {e}")
 
+    def write_confirmed_catalog_meta(now_dt: Optional[datetime] = None) -> None:
+        if not influx_point_cls:
+            return
+        point_time = now_dt or datetime.now(timezone.utc)
+        point = influx_point_cls(args.influx_measurement_meta).time(point_time)
+        point = point.tag("user", str(args.user))
+        point = point.tag("station", str(args.station))
+        point = point.field("unique_confirmed_all", float(len(confirmed_catalog)))
+        write_influx(point)
+
+    def bootstrap_confirmed_catalog_from_influx() -> int:
+        if not influx_client:
+            return 0
+        if confirmed_catalog:
+            return 0
+        try:
+            query_api = influx_client.query_api()
+            flux = f'''
+from(bucket: "{args.influx_bucket}")
+  |> range(start: 0, stop: now())
+  |> filter(fn: (r) => r._measurement == "{args.influx_measurement_frame}")
+  |> filter(fn: (r) => r._field == "confirmed")
+  |> filter(fn: (r) => r.decode_status == "confirmed")
+  |> filter(fn: (r) => r._value == true)
+  |> filter(fn: (r) => exists r.satellite)
+  |> group(columns: ["satellite"])
+  |> first(column: "_value")
+  |> keep(columns: ["satellite"])
+'''
+            tables = query_api.query(org=args.influx_org, query=flux)
+        except Exception as e:
+            print(f"[WARN] Failed to bootstrap confirmed catalog from InfluxDB: {e}")
+            return 0
+
+        added = 0
+        for table in tables:
+            for record in table.records:
+                sat = str(record.values.get("satellite") or "").strip()
+                if not sat:
+                    continue
+                key = sat_dedupe_key(sat)
+                if key and key not in confirmed_catalog:
+                    confirmed_catalog[key] = sat
+                    added += 1
+        return added
+
+    boot_added = bootstrap_confirmed_catalog_from_influx()
+    if boot_added > 0:
+        try:
+            save_confirmed_catalog(args.confirmed_catalog_out, confirmed_catalog)
+            print(
+                f"[CATALOG] Bootstrapped from InfluxDB: +{boot_added}, "
+                f"total={len(confirmed_catalog)}"
+            )
+        except OSError as e:
+            print(f"[WARN] Failed to write confirmed catalog bootstrap: {e}")
+
+    write_confirmed_catalog_meta()
+
+    frame_last_seen_ts_by_sat: Dict[str, float] = {}
+
     client = make_client(client_id=f"tinygs-json-{int(time.time())}")
     client.username_pw_set(args.user, args.password)
     if args.cafile:
-        client.tls_set(ca_certs=args.cafile)
+        tls_ctx = ssl.create_default_context()
+        tls_ctx.load_verify_locations(cafile=args.cafile)
+        if hasattr(ssl, "VERIFY_X509_PARTIAL_CHAIN"):
+            tls_ctx.verify_flags |= ssl.VERIFY_X509_PARTIAL_CHAIN
+        client.tls_set_context(tls_ctx)
     else:
         client.tls_set()
     client.tls_insecure_set(False)
@@ -462,6 +605,7 @@ def main() -> None:
         now_dt = datetime.now(timezone.utc)
         now_utc = now_dt.isoformat()
         topic_info = parse_topic_parts(msg.topic)
+        frame_filtered = False
 
         obj: Any = None
         json_ok = False
@@ -479,6 +623,14 @@ def main() -> None:
                 atomic_write_json(args.out, state_obj)
             except OSError as e:
                 print(f"[WARN] Nepodarilo se zapsat {args.out}: {e}")
+
+            state_sat_name = str(obj.get("sat") or "").strip()
+            state_geo_info: Dict[str, Any] = {"tle_found": False}
+            if sat_locator and state_sat_name:
+                try:
+                    state_geo_info = sat_locator.locate(state_sat_name, now_dt)
+                except Exception as e:
+                    print(f"[WARN] GEO locate failed for state satellite {state_sat_name!r}: {e}")
 
             if influx_point_cls:
                 # Reload gateway config on every state packet so lat/lon changes
@@ -499,82 +651,15 @@ def main() -> None:
                     value = topic_info.get(key)
                     if value:
                         point = point.tag(key, str(value))
-                if obj.get("sat"):
-                    point = point.tag("satellite", str(obj["sat"]))
+                if state_sat_name:
+                    point = point.tag("satellite", state_sat_name)
                 if obj.get("mode"):
                     point = point.tag("mode", str(obj["mode"]))
                 point = point.field("state_seen", True)
-                for field_key, field_value in extract_state_fields_for_influx(
-                    obj, gateway_lat=curr_lat, gateway_lon=curr_lon, gateway_alt_m=curr_alt_m
-                ).items():
-                    point = point.field(field_key, field_value)
-                write_influx(point)
-
-        if msg.topic == frame_topic:
-            sat_name = extract_frame_satellite(obj if json_ok else None)
-            frame_metrics = extract_frame_metrics(obj if json_ok else None)
-            geo_info: Dict[str, Any] = {"tle_found": False}
-            if sat_locator and sat_name:
-                try:
-                    geo_info = sat_locator.locate(sat_name, now_dt)
-                except Exception as e:
-                    print(f"[WARN] GEO locate failed for {sat_name!r}: {e}")
-            if sat_name:
-                if args.rx_out:
-                    rx_record: Dict[str, Any] = {
-                        "ts_utc": now_utc,
-                        "topic": msg.topic,
-                        "user": topic_info.get("user"),
-                        "station": topic_info.get("station"),
-                        "channel": topic_info.get("channel"),
-                        "cmd": topic_info.get("cmd"),
-                        "subcmd": topic_info.get("subcmd"),
-                        "satellite": sat_name,
-                        "payload": payload,
-                        "json": obj if json_ok else None,
-                    }
-                    if geo_info.get("tle_found"):
-                        rx_record["tle_satellite"] = geo_info.get("tle_satellite")
-                        for key in (
-                            "sat_lat_deg",
-                            "sat_lon_deg",
-                            "sat_alt_km",
-                            "sat_az_deg",
-                            "sat_el_deg",
-                            "slant_range_km",
-                            "ground_distance_km",
-                        ):
-                            if key in geo_info:
-                                rx_record[key] = geo_info[key]
-                    try:
-                        append_jsonl(args.rx_out, rx_record)
-                    except OSError as e:
-                        print(f"[WARN] Nepodarilo se zapsat rx data: {e}")
-
-            if influx_point_cls:
-                point = influx_point_cls(args.influx_measurement_frame).time(now_dt)
-                for key in ("user", "station", "channel", "cmd", "subcmd"):
-                    value = topic_info.get(key)
-                    if value:
-                        point = point.tag(key, str(value))
-                if sat_name:
-                    point = point.tag("satellite", sat_name)
-                point = point.tag("decode_status", str(frame_metrics["decode_status"]))
-                point = point.field("frame_seen", True)
-                point = point.field("has_json", json_ok)
-                if frame_metrics["rssi_db"] is not None:
-                    point = point.field("rssi_db", float(frame_metrics["rssi_db"]))
-                if frame_metrics["snr_db"] is not None:
-                    point = point.field("snr_db", float(frame_metrics["snr_db"]))
-                if frame_metrics["freq_error_hz"] is not None:
-                    point = point.field("freq_error_hz", float(frame_metrics["freq_error_hz"]))
-                point = point.field("confirmed", bool(frame_metrics["confirmed"]))
-                point = point.field("crc_error", bool(frame_metrics["crc_error"]))
-                point = point.field("payload_bytes", float(len(payload.encode("utf-8"))))
                 point = point.field("geo_enabled", geo_enabled)
-                point = point.field("tle_found", bool(geo_info.get("tle_found", False)))
-                if geo_info.get("tle_found"):
-                    tle_name = str(geo_info.get("tle_satellite") or "").strip()
+                point = point.field("tle_found", bool(state_geo_info.get("tle_found", False)))
+                if state_geo_info.get("tle_found"):
+                    tle_name = str(state_geo_info.get("tle_satellite") or "").strip()
                     if tle_name:
                         point = point.tag("tle_satellite", tle_name)
                     for key in (
@@ -586,11 +671,151 @@ def main() -> None:
                         "slant_range_km",
                         "ground_distance_km",
                     ):
-                        if key in geo_info:
-                            point = point.field(key, float(geo_info[key]))
+                        if key in state_geo_info:
+                            point = point.field(key, float(state_geo_info[key]))
+                for field_key, field_value in extract_state_fields_for_influx(
+                    obj, gateway_lat=curr_lat, gateway_lon=curr_lon, gateway_alt_m=curr_alt_m
+                ).items():
+                    point = point.field(field_key, field_value)
                 write_influx(point)
+                # Keep all-time unique confirmed count fresh in Influx for dashboard stats.
+                write_confirmed_catalog_meta(now_dt=now_dt)
+
+        if msg.topic == frame_topic:
+            sat_name = extract_frame_satellite(obj if json_ok else None)
+            frame_metrics = extract_frame_metrics(obj if json_ok else None)
+            if frame_metrics["crc_error"] and not sat_name:
+                frame_filtered = True
+                print("[FILTER] Dropped frame: crc_error without satellite")
+
+            if (
+                not frame_filtered
+                and sat_name
+                and args.frame_dedupe_window_s > 0
+            ):
+                key = sat_dedupe_key(sat_name)
+                now_ts = time.time()
+                prev_ts = frame_last_seen_ts_by_sat.get(key)
+                if prev_ts is not None and (now_ts - prev_ts) <= args.frame_dedupe_window_s:
+                    frame_filtered = True
+                    print(
+                        "[FILTER] Dropped frame: duplicate satellite frame "
+                        f"(satellite={sat_name}, window={args.frame_dedupe_window_s:.1f}s)"
+                    )
+                else:
+                    frame_last_seen_ts_by_sat[key] = now_ts
+
+            if not frame_filtered:
+                if sat_name and frame_metrics["confirmed"]:
+                    key = sat_dedupe_key(sat_name)
+                    if key not in confirmed_catalog:
+                        confirmed_catalog[key] = sat_name
+                        try:
+                            save_confirmed_catalog(args.confirmed_catalog_out, confirmed_catalog)
+                            print(
+                                f"[CATALOG] Added unique CONFIRMED satellite: {sat_name} "
+                                f"(total={len(confirmed_catalog)})"
+                            )
+                        except OSError as e:
+                            print(f"[WARN] Failed to update confirmed catalog: {e}")
+                        write_confirmed_catalog_meta(now_dt=now_dt)
+
+                geo_info: Dict[str, Any] = {"tle_found": False}
+                if sat_locator and sat_name:
+                    try:
+                        geo_info = sat_locator.locate(sat_name, now_dt)
+                    except Exception as e:
+                        print(f"[WARN] GEO locate failed for {sat_name!r}: {e}")
+
+                if (
+                    not frame_filtered
+                    and args.max_slant_range_km > 0
+                    and geo_info.get("tle_found")
+                ):
+                    slant_range_km = geo_info.get("slant_range_km")
+                    if isinstance(slant_range_km, (int, float)) and float(slant_range_km) > args.max_slant_range_km:
+                        frame_filtered = True
+                        sat_label = sat_name or str(geo_info.get("tle_satellite") or "unknown")
+                        print(
+                            "[FILTER] Dropped frame: slant range above threshold "
+                            f"(satellite={sat_label}, slant_range_km={float(slant_range_km):.1f}, "
+                            f"max_slant_range_km={args.max_slant_range_km:.1f})"
+                        )
+
+                if sat_name:
+                    if args.rx_out:
+                        rx_record: Dict[str, Any] = {
+                            "ts_utc": now_utc,
+                            "topic": msg.topic,
+                            "user": topic_info.get("user"),
+                            "station": topic_info.get("station"),
+                            "channel": topic_info.get("channel"),
+                            "cmd": topic_info.get("cmd"),
+                            "subcmd": topic_info.get("subcmd"),
+                            "satellite": sat_name,
+                            "payload": payload,
+                            "json": obj if json_ok else None,
+                        }
+                        if geo_info.get("tle_found"):
+                            rx_record["tle_satellite"] = geo_info.get("tle_satellite")
+                            for key in (
+                                "sat_lat_deg",
+                                "sat_lon_deg",
+                                "sat_alt_km",
+                                "sat_az_deg",
+                                "sat_el_deg",
+                                "slant_range_km",
+                                "ground_distance_km",
+                            ):
+                                if key in geo_info:
+                                    rx_record[key] = geo_info[key]
+                        try:
+                            append_jsonl(args.rx_out, rx_record)
+                        except OSError as e:
+                            print(f"[WARN] Nepodarilo se zapsat rx data: {e}")
+
+                if influx_point_cls:
+                    point = influx_point_cls(args.influx_measurement_frame).time(now_dt)
+                    for key in ("user", "station", "channel", "cmd", "subcmd"):
+                        value = topic_info.get(key)
+                        if value:
+                            point = point.tag(key, str(value))
+                    if sat_name:
+                        point = point.tag("satellite", sat_name)
+                    point = point.tag("decode_status", str(frame_metrics["decode_status"]))
+                    point = point.field("frame_seen", True)
+                    point = point.field("has_json", json_ok)
+                    if frame_metrics["rssi_db"] is not None:
+                        point = point.field("rssi_db", float(frame_metrics["rssi_db"]))
+                    if frame_metrics["snr_db"] is not None:
+                        point = point.field("snr_db", float(frame_metrics["snr_db"]))
+                    if frame_metrics["freq_error_hz"] is not None:
+                        point = point.field("freq_error_hz", float(frame_metrics["freq_error_hz"]))
+                    point = point.field("confirmed", bool(frame_metrics["confirmed"]))
+                    point = point.field("crc_error", bool(frame_metrics["crc_error"]))
+                    point = point.field("payload_bytes", float(len(payload.encode("utf-8"))))
+                    point = point.field("geo_enabled", geo_enabled)
+                    point = point.field("tle_found", bool(geo_info.get("tle_found", False)))
+                    if geo_info.get("tle_found"):
+                        tle_name = str(geo_info.get("tle_satellite") or "").strip()
+                        if tle_name:
+                            point = point.tag("tle_satellite", tle_name)
+                        for key in (
+                            "sat_lat_deg",
+                            "sat_lon_deg",
+                            "sat_alt_km",
+                            "sat_az_deg",
+                            "sat_el_deg",
+                            "slant_range_km",
+                            "ground_distance_km",
+                        ):
+                            if key in geo_info:
+                                point = point.field(key, float(geo_info[key]))
+                    write_influx(point)
 
         if args.raw_dir:
+            if msg.topic == frame_topic and frame_filtered:
+                return
             raw_record = {
                 "ts_utc": now_utc,
                 "topic": msg.topic,
@@ -617,10 +842,20 @@ def main() -> None:
         print(f"[FILE] Appending frame packets to: {args.rx_out}")
     if args.raw_dir:
         print(f"[FILE] Appending raw mirror to: {Path(args.raw_dir) / 'raw_messages.jsonl'}")
+    print(f"[FILE] Confirmed catalog: {args.confirmed_catalog_out}")
+    if args.frame_dedupe_window_s > 0:
+        print(f"[FILTER] Frame dedupe window: {args.frame_dedupe_window_s:.1f}s per satellite")
+    else:
+        print("[FILTER] Frame dedupe disabled")
+    if args.max_slant_range_km > 0:
+        print(f"[FILTER] Max slant range: {args.max_slant_range_km:.1f} km")
+    else:
+        print("[FILTER] Max slant range disabled")
     if influx_client:
         print(
             f"[INFLUX] Enabled: url={args.influx_url}, org={args.influx_org}, "
-            f"bucket={args.influx_bucket}, frame={args.influx_measurement_frame}, state={args.influx_measurement_state}"
+            f"bucket={args.influx_bucket}, frame={args.influx_measurement_frame}, "
+            f"state={args.influx_measurement_state}, meta={args.influx_measurement_meta}"
         )
     else:
         print("[INFLUX] Disabled (set INFLUXDB_* or --influx-* to enable)")
