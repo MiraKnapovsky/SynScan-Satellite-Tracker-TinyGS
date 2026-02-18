@@ -30,6 +30,13 @@ This project tracks satellites with a SynScan mount, using TinyGS MQTT state upd
 - `satellites.tle`: TLE dataset used for tracking.
 - `all_rx.jsonl`: optional frame packet archive (only when listener is started with `--rx-out`).
 
+## Clone Repository
+
+```bash
+git clone https://github.com/MiraKnapovsky/SynScan-Satellite-Tracker-TinyGS.git /home/<user>/synscan_tinygs_tracker
+cd /home/<user>/synscan_tinygs_tracker
+```
+
 ## Requirements
 
 - Python 3.10+ (tested with Python 3.11).
@@ -42,24 +49,18 @@ Install Python dependencies:
 python3 -m pip install -r requirements.txt
 ```
 
-## Clone Repository
+## Ultimate Beginner Guide (From Zero to Running System)
+
+Use this as the single end-to-end path on a new Debian machine.
+
+1. Clone and enter the project (skip this if you already used the `Clone Repository` section above):
 
 ```bash
-git clone https://github.com/MiraKnapovsky/SynScan-Satellite-Tracker-TinyGS-SynScan-.git /home/<user>/synscan_tinygs_tracker
+git clone https://github.com/MiraKnapovsky/SynScan-Satellite-Tracker-TinyGS.git /home/<user>/synscan_tinygs_tracker
 cd /home/<user>/synscan_tinygs_tracker
 ```
 
-## Setup 101 (From Zero)
-
-Use this when setting up on a new machine/user for the first time.
-
-1. Open project directory:
-
-```bash
-cd /home/<user>/synscan_tinygs_tracker
-```
-
-2. Create local virtual environment (path expected by service files):
+2. Create virtual environment and install dependencies:
 
 ```bash
 python3 -m venv tinygs_mqtt/env
@@ -68,93 +69,64 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-3. Prepare TinyGS credentials:
+3. Create local TinyGS credential file:
 
 ```bash
 cp mqtt_tinygs_listen.env.example mqtt_tinygs_listen.env
 ```
 
-Then edit `mqtt_tinygs_listen.env` and set at least:
+Edit `mqtt_tinygs_listen.env` and fill in:
 - `TINYGS_USER`
 - `TINYGS_STATION`
 - `TINYGS_PASS`
 
-4. Update TLE data:
-
-```bash
-python import_requests.py
-```
-
-5. Configure tracker for your hardware in `synscan_config.json`:
-- First safe run: keep `dummy: true` (no real mount movement).
-- Real mount run: set `dummy: false` and correct values for `port`, `lat`, `lon`, `alt`.
-
-6. Test listener manually:
-
-```bash
-python mqtt_tinygs_listen.py \
-  --user "$TINYGS_USER" \
-  --station "$TINYGS_STATION" \
-  --password "$TINYGS_PASS" \
-  --out /home/<user>/synscan_tinygs_tracker/state.json
-```
-
-Keep it running for a while and confirm `state.json` is updating.
-
-7. Start tracker:
-
-```bash
-python synscan_runner.py
-```
-
-8. Optional web UI:
-
-```bash
-export SYNSCAN_WEB_PASSWORD=change-me
-python synscan_web.py
-```
-
-9. Optional systemd service (user-portable template):
-
-```bash
-sudo cp "$(pwd)/mqtt_tinygs_listen@.service" /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now "mqtt_tinygs_listen@$(whoami).service"
-sudo systemctl status "mqtt_tinygs_listen@$(whoami).service"
-```
-
-## Quick Start
-
-1. Update TLE file:
+4. Download current TLE data:
 
 ```bash
 python3 import_requests.py
 ```
 
-2. Run MQTT listener (writes `state.json`):
+5. Configure tracker in `synscan_config.json`:
+- First safe setup: keep `dummy: true`.
+- Real movement later: set `dummy: false` and confirm `port`, `lat`, `lon`, `alt`.
+- Keep `state` and `status_file` paths pointing to this project directory.
+
+6. Load listener credentials into current shell:
 
 ```bash
-export TINYGS_USER=YOUR_USER_ID
-export TINYGS_STATION=YOUR_STATION
-export TINYGS_PASS=YOUR_PASSWORD
+set -a
+source mqtt_tinygs_listen.env
+set +a
+```
+
+7. Start MQTT listener manually (first validation run):
+
+```bash
 python3 mqtt_tinygs_listen.py \
   --user "$TINYGS_USER" \
   --station "$TINYGS_STATION" \
   --password "$TINYGS_PASS" \
-  --out /home/student/synscan_tinygs_tracker/state.json
+  --out /home/<user>/synscan_tinygs_tracker/state.json \
+  --frame-topic tinygs/${TINYGS_USER}/${TINYGS_STATION}/cmnd/frame/0
 ```
 
-3. Configure `synscan_config.json`.
-
-4. Start tracker:
+8. Verify that `state.json` is updating (open second terminal):
 
 ```bash
+cat /home/<user>/synscan_tinygs_tracker/state.json
+```
+
+9. Start tracker loop (second terminal):
+
+```bash
+cd /home/<user>/synscan_tinygs_tracker
 python3 synscan_runner.py
 ```
 
-5. Optional web UI:
+10. Start web UI (third terminal):
 
 ```bash
+cd /home/<user>/synscan_tinygs_tracker
 export SYNSCAN_WEB_PASSWORD=change-me
 # optional:
 # export SYNSCAN_WEB_USER=admin
@@ -163,7 +135,24 @@ export SYNSCAN_WEB_PASSWORD=change-me
 python3 synscan_web.py
 ```
 
-By default it binds to: `http://158.196.240.175:8080/config`.
+Open `http://158.196.240.175:8080/config` (or your custom host/port).
+
+11. Optional: run listener as systemd service after manual test passes:
+
+```bash
+sudo cp /home/<user>/synscan_tinygs_tracker/mqtt_tinygs_listen@.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now mqtt_tinygs_listen@$(whoami).service
+sudo systemctl status mqtt_tinygs_listen@$(whoami).service
+```
+
+12. Optional: if you already installed `synscan-follow-sat.service` and `synscan-web.service`, control them with:
+
+```bash
+sudo systemctl restart synscan-follow-sat.service
+sudo systemctl restart synscan-web.service
+sudo systemctl status synscan-follow-sat.service synscan-web.service
+```
 
 ## InfluxDB + Grafana
 
