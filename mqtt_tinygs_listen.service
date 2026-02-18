@@ -1,5 +1,5 @@
 [Unit]
-Description=TinyGS MQTT listener (raw + latest JSON)
+Description=TinyGS MQTT listener (latest state JSON)
 After=network-online.target
 Wants=network-online.target
 
@@ -7,16 +7,14 @@ Wants=network-online.target
 Type=simple
 User=student
 Group=student
-WorkingDirectory=/home/student/01diplomka
-EnvironmentFile=/home/student/01diplomka/mqtt_tinygs_listen.env
+WorkingDirectory=/home/student/synscan_tinygs_tracker
+EnvironmentFile=/home/student/synscan_tinygs_tracker/mqtt_tinygs_listen.env
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/home/student/01diplomka/tinygs_mqtt/env/bin/python /home/student/01diplomka/mqtt_tinygs_listen.py \
+ExecStart=/home/student/synscan_tinygs_tracker/tinygs_mqtt/env/bin/python /home/student/synscan_tinygs_tracker/mqtt_tinygs_listen.py \
   --user ${TINYGS_USER} \
   --station ${TINYGS_STATION} \
   --password ${TINYGS_PASS} \
-  --out /home/student/01diplomka/state.json \
-  --raw-dir /home/student/01diplomka/raw \
-  --rx-out /home/student/01diplomka/all_rx.jsonl \
+  --out /home/student/synscan_tinygs_tracker/state.json \
   --frame-topic tinygs/${TINYGS_USER}/${TINYGS_STATION}/cmnd/frame/0
 Restart=on-failure
 RestartSec=5

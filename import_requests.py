@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""Download TinyGS supported satellites and save them as local TLE file."""
 
 import os
 import tempfile

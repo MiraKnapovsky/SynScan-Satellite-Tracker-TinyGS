@@ -188,12 +188,12 @@ Counts can differ between packet panels and pass panels because:
 Recommended workflow:
 
 1. Edit:
-   - `01diplomka/dashboards/tinygs-overview.json`
+   - `synscan_tinygs_tracker/dashboards/tinygs-overview.json`
 2. Validate JSON:
-   - `python3 -m json.tool 01diplomka/dashboards/tinygs-overview.json > /dev/null`
+   - `python3 -m json.tool synscan_tinygs_tracker/dashboards/tinygs-overview.json > /dev/null`
 3. Increment `version` in dashboard JSON.
 4. Deploy to Grafana provisioning path:
-   - `sudo cp 01diplomka/dashboards/tinygs-overview.json /var/lib/grafana/dashboards/tinygs-overview.json`
+   - `sudo cp synscan_tinygs_tracker/dashboards/tinygs-overview.json /var/lib/grafana/dashboards/tinygs-overview.json`
 5. Refresh Grafana dashboard page.
 
 ## 9) Quick Troubleshooting

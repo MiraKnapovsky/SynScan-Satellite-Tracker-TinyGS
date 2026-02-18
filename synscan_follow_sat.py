@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
+"""Main SynScan tracking loop using TLE prediction and TinyGS state targets."""
 # Spouštění (reál):
-# python3 synscan_follow_sat.py --port /dev/ttyUSB0 --lat 49.83 --lon 18.17 --alt 240 --tle satellites.tle --mode state --state state.json --min-el 10 --interval 0.5 --lead 0.8 --status-file /home/student/01diplomka/synscan_status.json
+# python3 synscan_follow_sat.py --port /dev/ttyUSB0 --lat 49.83 --lon 18.17 --alt 240 --tle satellites.tle --mode state --state state.json --min-el 10 --interval 0.5 --lead 0.8 --status-file /home/student/synscan_tinygs_tracker/synscan_status.json
 #
 # Spouštění (dummy test bez montáže):
-# python3 synscan_follow_sat.py --dummy --lat 49.83 --lon 18.17 --alt 240 --tle satellites.tle --mode state --state state.json --interval 0.5 --lead 0.8 --status-file /home/student/01diplomka/synscan_status.json
+# python3 synscan_follow_sat.py --dummy --lat 49.83 --lon 18.17 --alt 240 --tle satellites.tle --mode state --state state.json --interval 0.5 --lead 0.8 --status-file /home/student/synscan_tinygs_tracker/synscan_status.json
 
 import argparse
 import json

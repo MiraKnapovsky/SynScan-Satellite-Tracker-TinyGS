@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+"""Flask UI/API for SynScan config, service control, status and manual moves."""
+
 import json
 import os
 import subprocess
@@ -20,10 +22,20 @@ WEB_USER = os.getenv("SYNSCAN_WEB_USER", "").strip()
 WEB_PASSWORD = os.getenv("SYNSCAN_WEB_PASSWORD", "").strip()
 if not WEB_PASSWORD:
     raise SystemExit("Set SYNSCAN_WEB_PASSWORD before starting synscan_web.py")
-if WEB_PASSWORD == "student":
-    raise SystemExit("SYNSCAN_WEB_PASSWORD='student' is blocked; choose a stronger password")
 
-WEB_HOST = os.getenv("SYNSCAN_WEB_HOST", "127.0.0.1").strip() or "127.0.0.1"
+def _normalize_web_host(value: str) -> str:
+    """Accept host or URL input and return plain host/IP for Flask bind."""
+    host = value.strip()
+    if host.startswith("http://"):
+        host = host[len("http://") :]
+    elif host.startswith("https://"):
+        host = host[len("https://") :]
+    return host.strip("/")
+
+
+WEB_HOST = _normalize_web_host(
+    os.getenv("SYNSCAN_WEB_HOST", "158.196.240.175")
+) or "158.196.240.175"
 try:
     WEB_PORT = int(os.getenv("SYNSCAN_WEB_PORT", "8080"))
 except ValueError as exc:

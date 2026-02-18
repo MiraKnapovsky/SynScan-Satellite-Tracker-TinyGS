@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
+"""Interactive manual SynScan control for quick Az/El commands and stop."""
 
 # python3 synscan_manual.py --port /dev/ttyUSB0
-r"""
-synscan_manual.py - lineární kompenzace průhybu
-Mapování:
-  Uživatel 0° (Horizont) -> Montáž 84.0°
-  Uživatel 90° (Zenit)   -> Montáž 0.0°
-"""
+# Mapování elevace:
+#   Uživatel 0° (Horizont) -> Montáž 84.0°
+#   Uživatel 90° (Zenit)   -> Montáž 0.0°
 
 import argparse
 

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+"""Validate synscan_config.json and exec the tracker with safe arguments."""
+
 import json
 import os
 import sys
