@@ -2,6 +2,12 @@
 
 This project tracks satellites with a SynScan mount, using TinyGS MQTT state updates and local TLE data.
 
+## Platform Notes
+
+- Tested on Raspberry Pi 5 (4 GB RAM).
+- Tested on Debian GNU/Linux with `systemd`.
+- This project is currently Debian-focused. Service files and setup steps in this README are prepared for Debian.
+
 ## Components
 
 - `synscan_follow_sat.py`: main tracker loop (select target, compute az/el, send mount commands).
@@ -28,12 +34,19 @@ This project tracks satellites with a SynScan mount, using TinyGS MQTT state upd
 
 - Python 3.10+ (tested with Python 3.11).
 - Access to serial port device (for real mount mode).
-- Linux with `systemd` (if using service controls in web UI).
+- Debian GNU/Linux with `systemd` (required for the provided service setup).
 
 Install Python dependencies:
 
 ```bash
 python3 -m pip install -r requirements.txt
+```
+
+## Clone Repository
+
+```bash
+git clone https://github.com/MiraKnapovsky/SynScan-Satellite-Tracker-TinyGS-SynScan-.git /home/<user>/synscan_tinygs_tracker
+cd /home/<user>/synscan_tinygs_tracker
 ```
 
 ## Setup 101 (From Zero)
