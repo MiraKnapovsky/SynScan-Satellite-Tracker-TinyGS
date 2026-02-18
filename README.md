@@ -1,4 +1,4 @@
-# SynScan Satellite Tracker (TinyGS + SynScan)
+# SynScan TinyGS Tracker
 
 This project tracks satellites with a SynScan mount, using TinyGS MQTT state updates and local TLE data.
 
