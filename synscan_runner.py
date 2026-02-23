@@ -42,13 +42,10 @@ def main():
     if not (-180.0 <= lon <= 180.0): _err("lon mimo rozsah -180..180")
 
     tle = ensure_exists(data.get("tle", ""), "tle")
-    mode = str(data.get("mode", "max"))
-    if mode not in ("name", "max", "state"):
-        _err("mode musí být name/max/state")
+    mode = "state"
 
     state = str(data.get("state", str(BASE_DIR / "state.json")))
-    if mode == "state":
-        ensure_exists(state, "state")
+    ensure_exists(state, "state")
 
     min_el = as_float(data.get("min_el", -10.0), "min_el")
     interval = as_float(data.get("interval", 0.5), "interval")
@@ -103,8 +100,7 @@ def main():
         "--az-home", str(az_home),
     ]
 
-    if mode == "state":
-        args += ["--state", state]
+    args += ["--state", state]
 
     if status_file:
         args += ["--status-file", status_file, "--status-every", str(status_every)]

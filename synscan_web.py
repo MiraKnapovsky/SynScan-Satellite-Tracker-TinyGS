@@ -2,11 +2,15 @@
 """Flask UI/API for SynScan config, service control, status and manual moves."""
 
 import json
+import math
 import os
+import secrets
 import subprocess
+from html import escape
 from pathlib import Path
 from typing import Any, Dict
-from flask import Flask, request, redirect, url_for, jsonify, render_template_string, Response
+import hmac
+from flask import Flask, request, redirect, url_for, jsonify, render_template_string, Response, g
 from synscan_common import goto_azel, open_port, send_cmd, transform_el
 
 app = Flask(__name__)
@@ -17,6 +21,8 @@ STATUS = BASE_DIR / "synscan_status.json"
 STATE  = BASE_DIR / "state.json"
 
 SERVICE = "synscan-follow-sat.service"
+CSRF_COOKIE = "synscan_csrf"
+CSRF_FIELD = "csrf_token"
 # If SYNSCAN_WEB_USER is empty, only password is checked (backward compatible).
 WEB_USER = os.getenv("SYNSCAN_WEB_USER", "").strip()
 WEB_PASSWORD = os.getenv("SYNSCAN_WEB_PASSWORD", "").strip()
@@ -80,12 +86,15 @@ TEMPLATE = r"""
 
     <div class="row" style="margin-top:12px;">
       <form method="post" action="/svc/start" style="display:inline;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button class="btn" type="submit">Start</button>
       </form>
       <form method="post" action="/svc/stop" style="display:inline;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button class="btn danger" type="submit">Stop</button>
       </form>
       <form method="post" action="/svc/restart" style="display:inline;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button class="btn" type="submit">Restart</button>
       </form>
       <a class="btn" href="/logs">Logs</a>
@@ -118,6 +127,7 @@ TEMPLATE = r"""
   <div class="card">
     <h2>Konfigurace (synscan_config.json)</h2>
     <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <label>dummy (test bez montáže)</label>
       <input type="checkbox" name="dummy" {% if c.get('dummy') %}checked{% endif %}>
 
@@ -133,24 +143,8 @@ TEMPLATE = r"""
       <label>alt (nadmořská výška v m)</label>
       <input name="alt" value="{{ c.get('alt',240) }}">
 
-      <label>tle (soubor s TLE)</label>
-      <input name="tle" style="width:520px" value="{{ c.get('tle', base_dir + '/satellites.tle') }}">
-
-      <label>mode (výběr cíle)</label>
-      <select name="mode">
-        <option value="state" {% if c.get('mode','state')=='state' %}selected{% endif %}>state</option>
-        <option value="max"   {% if c.get('mode')=='max' %}selected{% endif %}>max</option>
-        <option value="name"  {% if c.get('mode')=='name' %}selected{% endif %}>name</option>
-      </select>
-
-      <label>state (state.json pro režim state)</label>
-      <input name="state" style="width:520px" value="{{ c.get('state', base_dir + '/state.json') }}">
-
       <label>min_el (min. elevace pro tracking)</label>
       <input name="min_el" value="{{ c.get('min_el',10) }}">
-
-      <label>interval (perioda výpočtu/příkazů v s)</label>
-      <input name="interval" value="{{ c.get('interval',0.5) }}">
 
       <label>lead (predikční náskok v s)</label>
       <input name="lead" value="{{ c.get('lead',0.8) }}">
@@ -169,12 +163,6 @@ TEMPLATE = r"""
 
       <label>az_home (bezpečný azimut pro odmotání)</label>
       <input name="az_home" value="{{ c.get('az_home',0.0) }}">
-
-      <label>status_file (kam tracker zapisuje status)</label>
-      <input name="status_file" style="width:520px" value="{{ c.get('status_file', base_dir + '/synscan_status.json') }}">
-
-      <label>status_every (perioda zápisu statusu v s)</label>
-      <input name="status_every" value="{{ c.get('status_every',1.0) }}">
 
       <div class="row" style="margin-top:14px;">
         <button class="btn" type="submit">Uložit + restart služby</button>
@@ -203,6 +191,8 @@ TEMPLATE = r"""
   </div>
 
   <script>
+    const csrfToken = "{{ csrf_token }}";
+
     function setText(id, v){
       document.getElementById(id).textContent = (v === undefined || v === null || v === "") ? "-" : v;
     }
@@ -227,8 +217,9 @@ TEMPLATE = r"""
       if(!s){
         return 'Služba běží, ale zatím není vytvořený synscan_status.json.';
       }
-      if(s.do_center){
-        return 'Centruji montáž na výchozí pozici.';
+      const isCenter = (s.phase === 'center') || (s.do_center === true);
+      if(isCenter){
+        return 'Surveillance režim: držím neutrální polohu.';
       }
       if(s.tracked_name){
         return 'Sleduji satelit: ' + s.tracked_name + '.';
@@ -281,7 +272,7 @@ TEMPLATE = r"""
       try{
         const r = await fetch('/api/manual/goto', {
           method: 'POST',
-          headers: {'Content-Type': 'application/json'},
+          headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken},
           body: JSON.stringify({az: az, el: el}),
         });
         const j = await r.json();
@@ -298,7 +289,10 @@ TEMPLATE = r"""
 
     async function manualStop(){
       try{
-        const r = await fetch('/api/manual/stop', {method: 'POST'});
+        const r = await fetch('/api/manual/stop', {
+          method: 'POST',
+          headers: {'X-CSRF-Token': csrfToken},
+        });
         const j = await r.json();
         if(!r.ok || !j.ok){
           setText('man_out', j.error || 'Chyba.');
@@ -330,8 +324,9 @@ TEMPLATE = r"""
         }
 
         setText('ph', s.phase ?? '-');
+        const isCenter = (s.phase === 'center') || (s.do_center === true);
 
-        const tgt = (s.phase === 'no_target') ? '(nic)' : (s.do_center ? '[CENTER]' : (s.tracked_name ? s.tracked_name : '(nic)'));
+        const tgt = (s.phase === 'no_target') ? '(nic)' : (isCenter ? '[SURVEILLANCE]' : (s.tracked_name ? s.tracked_name : '(nic)'));
         setText('tgt', tgt);
 
         setNum('az',  s.az_deg, 1);
@@ -432,6 +427,30 @@ def _unauthorized() -> Response:
         {"WWW-Authenticate": 'Basic realm="SynScan"'},
     )
 
+def _new_csrf_token() -> str:
+    return secrets.token_urlsafe(32)
+
+def _validate_csrf() -> bool:
+    cookie_token = getattr(g, "csrf_token", None) or ""
+    if not cookie_token:
+        return False
+
+    provided = request.headers.get("X-CSRF-Token")
+    if not provided:
+        provided = request.form.get(CSRF_FIELD)
+
+    # Optional JSON fallback for non-browser API clients.
+    if not provided and request.is_json:
+        payload = request.get_json(silent=True)
+        if isinstance(payload, dict):
+            raw = payload.get(CSRF_FIELD)
+            if raw is not None:
+                provided = str(raw)
+
+    if not isinstance(provided, str):
+        return False
+    return hmac.compare_digest(provided, cookie_token)
+
 @app.before_request
 def require_auth():
     auth = request.authorization
@@ -441,6 +460,21 @@ def require_auth():
         return _unauthorized()
     if auth.password != WEB_PASSWORD:
         return _unauthorized()
+
+    token = request.cookies.get(CSRF_COOKIE)
+    if not token:
+        token = _new_csrf_token()
+    g.csrf_token = token
+
+    if request.method == "POST" and not _validate_csrf():
+        return Response("CSRF validation failed", 403)
+
+@app.after_request
+def set_csrf_cookie(resp: Response) -> Response:
+    token = getattr(g, "csrf_token", None)
+    if token and request.cookies.get(CSRF_COOKIE) != token:
+        resp.set_cookie(CSRF_COOKIE, token, httponly=True, samesite="Strict")
+    return resp
 
 def service_state() -> dict:
     a = sh(["systemctl", "is-active", SERVICE]).stdout.strip()
@@ -499,6 +533,13 @@ def api_manual_goto():
     except Exception:
         return jsonify({"ok": False, "error": "Neplatné Az/El."}), 400
 
+    if not math.isfinite(az_user) or not math.isfinite(el_user):
+        return jsonify({"ok": False, "error": "Az/El musí být konečné číslo."}), 400
+    if not (0.0 <= az_user <= 360.0):
+        return jsonify({"ok": False, "error": "Az musí být v rozsahu 0..360°."}), 400
+    if not (0.0 <= el_user <= 90.0):
+        return jsonify({"ok": False, "error": "El musí být v rozsahu 0..90°."}), 400
+
     try:
         el_send = transform_el(el_user)
         with open_port(_get_port()) as ser:
@@ -532,7 +573,12 @@ def home():
 
 @app.get("/config")
 def config_get():
-    return render_template_string(TEMPLATE, c=load_cfg(), base_dir=str(BASE_DIR))
+    return render_template_string(
+        TEMPLATE,
+        c=load_cfg(),
+        base_dir=str(BASE_DIR),
+        csrf_token=g.csrf_token,
+    )
 
 @app.post("/config")
 def config_post():
@@ -547,6 +593,13 @@ def config_post():
         except (TypeError, ValueError) as exc:
             raise ValueError(f"Neplatná hodnota pole '{name}': {raw!r}") from exc
 
+    current_cfg = load_cfg()
+    tle_fixed = str(current_cfg.get("tle") or (BASE_DIR / "satellites.tle"))
+    state_fixed = str(current_cfg.get("state") or (BASE_DIR / "state.json"))
+    status_file_fixed = str(current_cfg.get("status_file") or (BASE_DIR / "synscan_status.json"))
+    interval_fixed = float(current_cfg.get("interval", 0.5))
+    status_every_fixed = float(current_cfg.get("status_every", 1.0))
+
     try:
         cfg: Dict[str, Any] = {
             "dummy": (request.form.get("dummy") == "on"),
@@ -554,19 +607,19 @@ def config_post():
             "lat": parse_float_field("lat", 0.0),
             "lon": parse_float_field("lon", 0.0),
             "alt": parse_float_field("alt", 0.0),
-            "tle": f("tle", str(BASE_DIR / "satellites.tle")),
-            "mode": f("mode", "state"),
-            "state": f("state", str(BASE_DIR / "state.json")),
+            "tle": tle_fixed,
+            "mode": "state",
+            "state": state_fixed,
             "min_el": parse_float_field("min_el", 10.0),
-            "interval": parse_float_field("interval", 0.5),
+            "interval": interval_fixed,
             "lead": parse_float_field("lead", 0.8),
             "wrap_limit": parse_float_field("wrap_limit", 270.0),
             "wrap_margin": parse_float_field("wrap_margin", 10.0),
             "plan_horizon": parse_float_field("plan_horizon", 2400.0),
             "plan_step": parse_float_field("plan_step", 2.0),
             "az_home": parse_float_field("az_home", 0.0),
-            "status_file": f("status_file", str(BASE_DIR / "synscan_status.json")),
-            "status_every": parse_float_field("status_every", 1.0),
+            "status_file": status_file_fixed,
+            "status_every": status_every_fixed,
         }
     except ValueError as exc:
         return str(exc), 400
@@ -606,7 +659,7 @@ def svc_restart():
 def logs():
     r = sh(["journalctl", "-u", SERVICE, "-n", "200", "--no-pager"])
     text = r.stdout if r.stdout else "(no logs)"
-    return f"<pre>{text}</pre>"
+    return f"<pre>{escape(text)}</pre>"
 
 if __name__ == "__main__":
     app.run(host=WEB_HOST, port=WEB_PORT, debug=False)

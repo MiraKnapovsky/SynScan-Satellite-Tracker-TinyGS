@@ -9,7 +9,6 @@
 import argparse
 import json
 import os
-import re
 import sys
 import time
 from datetime import datetime
@@ -133,15 +132,6 @@ def choose_wrap_shift(az_unwrapped: List[float], limit: float, margin: float,
     return best_k, ok
 
 # ---------- STATE.JSON (MQTT) ----------
-_name_rx = re.compile(r"[^a-z0-9]+")
-
-def normalize_name(s: str) -> str:
-    s = (s or "").strip().lower()
-    s = s.replace("_", "-")
-    s = _name_rx.sub("-", s)
-    s = re.sub(r"-+", "-", s).strip("-")
-    return s
-
 def read_state(path: Path) -> Tuple[Optional[int], Optional[str]]:
     """Vrací (norad, sat_str) z JSONu; když nejsou, vrací (None, None)."""
     try:
@@ -166,27 +156,13 @@ def read_state(path: Path) -> Tuple[Optional[int], Optional[str]]:
     except Exception:
         return None, None
 
-def pick_sat_from_state(sats: List[EarthSatellite],
-                        sats_by_norad: Dict[int, EarthSatellite],
-                        norad: Optional[int],
-                        sat_s: Optional[str]) -> Optional[EarthSatellite]:
-    # 1) podle NORAD (satnum)
+def pick_sat_from_state(
+    sats_by_norad: Dict[int, EarthSatellite],
+    norad: Optional[int],
+) -> Optional[EarthSatellite]:
+    # Pouze NORAD mapování (bez fallbacku podle názvu).
     if norad is not None and norad in sats_by_norad:
         return sats_by_norad[norad]
-
-    # 2) fallback podle "sat" (substring v názvu z TLE)
-    if sat_s:
-        key = normalize_name(sat_s)
-        if key:
-            for s in sats:
-                if key in normalize_name(s.name):
-                    return s
-            # slabší fallback: jen prefix před prvním '-'
-            prefix = key.split("-", 1)[0]
-            if prefix:
-                for s in sats:
-                    if prefix in normalize_name(s.name):
-                        return s
     return None
 
 # ---------- STATUS JSON (pro web) ----------
@@ -231,7 +207,7 @@ def main():
                     help='Azimut pro bezpečné odmotání před přeletom.')
 
     ap.add_argument('--center-el', type=float, default=50.0,
-                    help='Elevace (uživatelská, ve stupních) pro vycentrování když state.json nemá NORAD ani sat')
+                    help='Elevace (uživatelská, ve stupních) pro neutrální pozici když state.json nemá NORAD')
 
     # --- NOVÉ: status file pro web ---
     ap.add_argument('--status-file', default=None,
@@ -354,7 +330,7 @@ def main():
     desired_norad: Optional[int] = None
     desired_sat_str: Optional[str] = None
     desired_sat_obj: Optional[EarthSatellite] = None
-    state_has_any_key = False  # jestli state obsahuje aspoň NORAD nebo sat
+    state_has_any_key = False  # jestli state obsahuje platný NORAD
 
     emit_status(
         phase="starting",
@@ -385,16 +361,25 @@ def main():
                 if mtime is not None and mtime != last_state_mtime:
                     last_state_mtime = mtime
                     desired_norad, desired_sat_str = read_state(state_path)
-                    state_has_any_key = (desired_norad is not None) or (desired_sat_str is not None)
-                    desired_sat_obj = pick_sat_from_state(sats, sats_by_norad, desired_norad, desired_sat_str)
+                    state_has_any_key = desired_norad is not None
+                    desired_sat_obj = pick_sat_from_state(sats_by_norad, desired_norad)
 
-                    if state_has_any_key:
+                    if desired_norad is not None:
                         if desired_sat_obj:
-                            print(f"\n[STATE] Cíl: NORAD={desired_norad} sat='{desired_sat_str}' -> TLE='{desired_sat_obj.name}'")
+                            print(
+                                f"\n[STATE] Cíl: NORAD={desired_norad} -> TLE='{desired_sat_obj.name}' "
+                                f"(state sat='{desired_sat_str}')"
+                            )
                         else:
-                            print(f"\n[STATE] Cíl nenalezen v TLE: NORAD={desired_norad} sat='{desired_sat_str}'")
+                            print(
+                                f"\n[STATE] Cíl nenalezen v TLE: NORAD={desired_norad} "
+                                f"(state sat='{desired_sat_str}')"
+                            )
                     else:
-                        print(f"\n[STATE] state.json nemá NORAD ani sat -> centering režim (El={args.center_el}°)")
+                        print(
+                            f"\n[STATE] state.json nemá NORAD -> surveillance/neutral režim "
+                            f"(Az={args.az_home}°, El={args.center_el}°)"
+                        )
 
             # --- výběr cíle ---
             target_sat: Optional[EarthSatellite] = None
@@ -432,31 +417,42 @@ def main():
                         target_sat = tracked
 
             else:  # state
-                if state_has_any_key:
-                    target_sat = desired_sat_obj
-                else:
+                if desired_norad is None:
+                    tracked = None
                     do_center = True
+                else:
+                    target_sat = desired_sat_obj
+                    if target_sat is None:
+                        tracked = None
 
-            # --- CENTER režim: azimut "tam kde je" + elevace center-el ---
+            # --- CENTER režim: neutrální pozice az_home + center_el ---
             if do_center:
-                az = last_az if last_az is not None else 0.0
+                az = float(args.az_home)
                 el_u = float(args.center_el)
                 el_r = transform_el(el_u)
 
                 if not hc_busy(ser, args.dummy):
-                    cmd = f"B{deg_to_hex16(az)},{deg_to_hex16(el_r)}"
-                    last_cmd = cmd
-                    last_cmd_ts = iso_now()
-                    send_cmd(ser, cmd, args.dummy)
-                    last_az, az_unwrapped = update_unwrapped(last_az, az_unwrapped, az)
-                    last_el_user = el_u
+                    need_move = (
+                        last_az is None or
+                        last_el_user is None or
+                        max(deltadeg_wrap(az, last_az), abs(el_u - last_el_user)) >= args.min_step
+                    )
+                    if need_move:
+                        cmd = f"B{deg_to_hex16(az)},{deg_to_hex16(el_r)}"
+                        last_cmd = cmd
+                        last_cmd_ts = iso_now()
+                        send_cmd(ser, cmd, args.dummy)
+                        last_az, az_unwrapped = update_unwrapped(last_az, az_unwrapped, az)
+                        last_el_user = el_u
 
-                    sys.stdout.write(f"\r[CENTER] Az: {az:6.1f}° | El: {el_u:5.1f}° -> Montáž: {el_r:5.2f}°     ")
+                    sys.stdout.write(
+                        f"\r[SURVEILLANCE] Neutral Az: {az:6.1f}° | El: {el_u:5.1f}° -> Montáž: {el_r:5.2f}°     "
+                    )
                     sys.stdout.flush()
 
                 emit_status(
                     phase="center",
-                    message=f"[CENTER] Az {az:.1f}° | El {el_u:.1f}° -> Montáž {el_r:.2f}°",
+                    message=f"[SURVEILLANCE] Neutral Az {az:.1f}° | El {el_u:.1f}° -> Montáž {el_r:.2f}°",
                     tracked=tracked,
                     desired_norad=desired_norad,
                     desired_sat_str=desired_sat_str,
