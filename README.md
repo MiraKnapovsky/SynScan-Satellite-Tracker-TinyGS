@@ -89,7 +89,6 @@ python3 import_requests.py
 5. Configure tracker in `synscan_config.json`:
 - First safe setup: keep `dummy: true`.
 - Real movement later: set `dummy: false` and confirm `port`, `lat`, `lon`, `alt`.
-- Tracker runs in `state` mode only (no `max` / `name` runtime selection).
 - Target selection is NORAD-only from `state.json` key `NORAD` (satellite name is informational only).
 - When `NORAD` is missing in `state.json`, tracker switches to surveillance/neutral position.
 - Keep `state` and `status_file` paths pointing to this project directory.
@@ -220,7 +219,7 @@ Detailed dashboard documentation:
 - `port`: serial port path (for real mode), e.g. `/dev/ttyUSB0`.
 - `lat`, `lon`, `alt`: observer location.
 - `tle`: path to TLE file.
-- `mode`: fixed to `state` by runner.
+- `mode`: tracking mode key in config.
 - `state`: path to TinyGS state file (`state.json`) used for NORAD target selection.
 - `min_el`: minimum elevation threshold.
 - `interval`: control loop period in seconds.
