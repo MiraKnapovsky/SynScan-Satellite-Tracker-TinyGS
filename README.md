@@ -174,6 +174,9 @@ INFLUXDB_MEAS_STATE=tinygs_state
 INFLUXDB_MEAS_META=tinygs_meta
 # Optional custom CA bundle for MQTT TLS (when unset, system trust store is used)
 TINYGS_CAFILE=/path/to/ca-bundle.pem
+# Optional: tracker status source used to stamp tracked_norad into Influx points
+TINYGS_TRACKER_STATUS_FILE=/home/<user>/synscan_tinygs_tracker/synscan_status.json
+TINYGS_TRACKER_STATUS_MAX_AGE_S=10
 ```
 
 Then restart listener:

@@ -34,6 +34,11 @@ GEO_FIELD_KEYS = (
     "sat_el_deg",
     "slant_range_km",
     "ground_distance_km",
+    "tle_pass_max_el_deg",
+    "tle_pass_aos_unix_s",
+    "tle_pass_culm_unix_s",
+    "tle_pass_los_unix_s",
+    "tle_pass_duration_s",
 )
 
 def main() -> None:
@@ -80,6 +85,17 @@ def main() -> None:
         default=os.getenv("TINYGS_GATEWAY_CONFIG", str(BASE_DIR / "synscan_config.json")),
         help="JSON config fallback with keys lat/lon/alt",
     )
+    ap.add_argument(
+        "--tracker-status-file",
+        default=os.getenv("TINYGS_TRACKER_STATUS_FILE", str(BASE_DIR / "synscan_status.json")),
+        help="Path to synscan tracker status JSON (tracked_norad source)",
+    )
+    ap.add_argument(
+        "--tracker-status-max-age-s",
+        type=float,
+        default=float(os.getenv("TINYGS_TRACKER_STATUS_MAX_AGE_S", "10")),
+        help="Ignore tracked_norad when tracker status file is older than this many seconds (0 disables)",
+    )
     ap.add_argument("--gateway-lat", type=float, default=parse_env_float("TINYGS_GATEWAY_LAT"))
     ap.add_argument("--gateway-lon", type=float, default=parse_env_float("TINYGS_GATEWAY_LON"))
     ap.add_argument("--gateway-alt-m", type=float, default=parse_env_float("TINYGS_GATEWAY_ALT_M"))
@@ -92,6 +108,8 @@ def main() -> None:
         raise SystemExit("--frame-dedupe-window-s must be >= 0")
     if args.max_slant_range_km < 0:
         raise SystemExit("--max-slant-range-km must be >= 0")
+    if args.tracker_status_max_age_s < 0:
+        raise SystemExit("--tracker-status-max-age-s must be >= 0")
 
     state_topic = args.state_topic or f"tinygs/{args.user}/{args.station}/cmnd/begine"
     frame_topic = args.frame_topic or f"tinygs/{args.user}/{args.station}/cmnd/frame/0"
@@ -102,6 +120,13 @@ def main() -> None:
     ensure_parent_dir(args.confirmed_catalog_out)
     if args.raw_dir:
         Path(args.raw_dir).mkdir(parents=True, exist_ok=True)
+
+    tracker_status_path: Optional[Path] = None
+    tracker_status_file = str(args.tracker_status_file or "").strip()
+    if tracker_status_file:
+        tracker_status_path = Path(tracker_status_file).expanduser()
+    tracker_status_mtime_ns: Optional[int] = None
+    tracker_status_cached_norad: Optional[int] = None
 
     confirmed_catalog = load_confirmed_catalog(args.confirmed_catalog_out)
     print(
@@ -187,6 +212,42 @@ def main() -> None:
         point = point.tag("station", str(args.station))
         point = point.field("unique_confirmed_all", float(len(confirmed_catalog)))
         write_influx(point)
+
+    def read_tracked_norad(now_dt: datetime) -> Optional[int]:
+        nonlocal tracker_status_mtime_ns, tracker_status_cached_norad
+        if tracker_status_path is None:
+            return None
+        try:
+            st = tracker_status_path.stat()
+        except OSError:
+            return None
+
+        if args.tracker_status_max_age_s > 0:
+            age_s = now_dt.timestamp() - float(st.st_mtime)
+            if age_s > args.tracker_status_max_age_s:
+                return None
+
+        if tracker_status_mtime_ns == st.st_mtime_ns:
+            return tracker_status_cached_norad
+
+        tracker_status_mtime_ns = st.st_mtime_ns
+        tracker_status_cached_norad = None
+        try:
+            status_obj = json.loads(tracker_status_path.read_text(encoding="utf-8"))
+        except Exception as e:
+            print(f"[WARN] Failed to read tracker status {tracker_status_path}: {e}")
+            return None
+        if not isinstance(status_obj, dict):
+            return None
+        raw_norad = status_obj.get("tracked_norad")
+        try:
+            norad = int(raw_norad) if raw_norad is not None else None
+        except (TypeError, ValueError):
+            norad = None
+        if norad is None or norad <= 0:
+            return None
+        tracker_status_cached_norad = norad
+        return tracker_status_cached_norad
 
     def bootstrap_confirmed_catalog_from_influx() -> int:
         if not influx_client:
@@ -274,11 +335,21 @@ from(bucket: "{args.influx_bucket}")
 
         state_sat_name = str(obj.get("sat") or "").strip()
         state_geo_info: Dict[str, Any] = {"tle_found": False}
-        if sat_locator and state_sat_name:
+        tracked_norad = read_tracked_norad(now_dt=now_dt)
+        if sat_locator:
+            if tracked_norad is None:
+                print("[FILTER] Dropped state: missing tracked_norad for NORAD-only TLE lookup")
+                return
             try:
-                state_geo_info = sat_locator.locate(state_sat_name, now_dt)
+                state_geo_info = sat_locator.locate(tracked_norad, now_dt)
             except Exception as e:
-                print(f"[WARN] GEO locate failed for state satellite {state_sat_name!r}: {e}")
+                print(f"[WARN] GEO locate failed for state tracked_norad={tracked_norad}: {e}")
+            if not state_geo_info.get("tle_found"):
+                print(
+                    "[FILTER] Dropped state: tracked_norad not found in TLE "
+                    f"(tracked_norad={tracked_norad})"
+                )
+                return
 
         if not influx_point_cls:
             return
@@ -303,6 +374,9 @@ from(bucket: "{args.influx_bucket}")
                 point = point.tag(key, str(value))
         if state_sat_name:
             point = point.tag("satellite", state_sat_name)
+        if tracked_norad is not None:
+            point = point.tag("tracked_norad", str(tracked_norad))
+            point = point.field("tracked_norad", float(tracked_norad))
         if obj.get("mode"):
             point = point.tag("mode", str(obj["mode"]))
         point = point.field("state_seen", True)
@@ -333,6 +407,8 @@ from(bucket: "{args.influx_bucket}")
         topic_info: Dict[str, Optional[str]],
     ) -> bool:
         frame_filtered = False
+        geo_info: Dict[str, Any] = {"tle_found": False}
+        tracked_norad = read_tracked_norad(now_dt=now_dt)
         sat_name = extract_frame_satellite(obj if json_ok else None)
         frame_metrics = extract_frame_metrics(obj if json_ok else None)
         if frame_metrics["crc_error"] and not sat_name:
@@ -356,13 +432,21 @@ from(bucket: "{args.influx_bucket}")
             else:
                 frame_last_seen_ts_by_sat[key] = now_ts
 
-        if not frame_filtered:
-            geo_info: Dict[str, Any] = {"tle_found": False}
-            if sat_locator and sat_name:
+        if not frame_filtered and sat_locator:
+            if tracked_norad is None:
+                frame_filtered = True
+                print("[FILTER] Dropped frame: missing tracked_norad for NORAD-only TLE lookup")
+            else:
                 try:
-                    geo_info = sat_locator.locate(sat_name, now_dt)
+                    geo_info = sat_locator.locate(tracked_norad, now_dt)
                 except Exception as e:
-                    print(f"[WARN] GEO locate failed for {sat_name!r}: {e}")
+                    print(f"[WARN] GEO locate failed for tracked_norad={tracked_norad}: {e}")
+                if not geo_info.get("tle_found"):
+                    frame_filtered = True
+                    print(
+                        "[FILTER] Dropped frame: tracked_norad not found in TLE "
+                        f"(tracked_norad={tracked_norad})"
+                    )
 
             if (
                 not frame_filtered
@@ -411,6 +495,8 @@ from(bucket: "{args.influx_bucket}")
                 for key in GEO_FIELD_KEYS:
                     if key in geo_info:
                         rx_record[key] = geo_info[key]
+            if tracked_norad is not None:
+                rx_record["tracked_norad"] = tracked_norad
             try:
                 append_jsonl(args.rx_out, rx_record)
             except OSError as e:
@@ -424,6 +510,9 @@ from(bucket: "{args.influx_bucket}")
                     point = point.tag(key, str(value))
             if sat_name:
                 point = point.tag("satellite", sat_name)
+            if tracked_norad is not None:
+                point = point.tag("tracked_norad", str(tracked_norad))
+                point = point.field("tracked_norad", float(tracked_norad))
             point = point.tag("decode_status", str(frame_metrics["decode_status"]))
             point = point.field("frame_seen", True)
             point = point.field("has_json", json_ok)
@@ -509,6 +598,16 @@ from(bucket: "{args.influx_bucket}")
     if args.raw_dir:
         print(f"[FILE] Appending raw mirror to: {Path(args.raw_dir) / 'raw_messages.jsonl'}")
     print(f"[FILE] Confirmed catalog: {args.confirmed_catalog_out}")
+    if tracker_status_path is not None:
+        if args.tracker_status_max_age_s > 0:
+            print(
+                f"[TRACKER] tracked_norad source: {tracker_status_path} "
+                f"(max age {args.tracker_status_max_age_s:.1f}s)"
+            )
+        else:
+            print(f"[TRACKER] tracked_norad source: {tracker_status_path} (no max age)")
+    else:
+        print("[TRACKER] tracked_norad source disabled")
     if args.frame_dedupe_window_s > 0:
         print(f"[FILTER] Frame dedupe window: {args.frame_dedupe_window_s:.1f}s per satellite")
     else:

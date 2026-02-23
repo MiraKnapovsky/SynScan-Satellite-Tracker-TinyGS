@@ -11,6 +11,7 @@ Provisioned Grafana target:
 Current dashboard metadata:
 - Title: `Helix Rotator 433MHz`
 - UID: `tinygs-overview`
+- Version: `87`
 - Default time range: `now-12h` to `now`
 - Refresh: every `30s`
 
@@ -125,44 +126,47 @@ These charts bin confirmed frames and then show either packet count or median qu
 - `Success by frequency band`
 - `Passes by max elevation bin (begine, frame-preferred elevation)`
 - `Confirmed Reception Probability by Max Pass Elevation`
+- `TEMP: NOT_CONFIRMED passes detail`
 
-These three are pass-based, not packet-based.
+These panels are pass-based, not packet-based.
 
 ## 4) Pass Logic (Used by pass-based panels)
 
-Pass ID is derived per satellite from ordered `tinygs_state` timeline:
+For max-elevation pass panels (`Passes by max elevation bin`, `Confirmed Reception Probability`, and `TEMP: ... detail`), pass identity is built from TLE pass window fields, not from timeline gaps.
 
-- First state point starts pass `0`.
-- A new pass starts when gap between consecutive state points is `> 900s` (15 min).
+Pass candidate source:
+- `tinygs_state` with fields:
+  - `tle_pass_max_el_deg`
+  - `tle_pass_aos_unix_s`
+  - `tle_pass_los_unix_s`
+- Requires `tracked_norad`.
 
-Then each pass gets:
+Pass key:
+- `pass_key = NORAD + "|" + int(tle_pass_aos_unix_s) + "|" + int(tle_pass_los_unix_s)`
+- Integer seconds are truncation (`int(...)` in Flux).
 
-- A status:
-  - `CONFIRMED` if at least one confirmed frame exists in that pass.
-  - `NOT_CONFIRMED` otherwise.
+Per-pass values:
+- `max_el_deg` comes from `tinygs_state.tle_pass_max_el_deg`.
+- `AOS/LOS` come from `tinygs_state.tle_pass_aos_unix_s` / `tle_pass_los_unix_s` and are shown as UTC time.
 
-- A max elevation bin:
-  - Base from `tinygs_state.sat_el_deg`.
-  - Frame-preferred elevation enhancement:
-    - Maximum of state max elevation and frame max elevation for that pass.
+Pass status:
+- `CONFIRMED` if at least one `tinygs_frame` row with `decode_status == confirmed` maps to the same pass key (`NORAD|AOS|LOS`) using frame `tle_pass_aos_unix_s` and `tle_pass_los_unix_s`.
+- `NOT_CONFIRMED` otherwise.
 
-- A frequency band (for frequency success table):
-  - Taken from pass state frequency and grouped into 10 MHz bands (`400-409 MHz`, etc.).
-
-Satellite catalog scope used in these panels:
-- Catalog is all-time unique satellites with confirmed history.
-- Built from `tinygs_frame` confirmed records using `range(start: 0, stop: now())`.
+Notes:
+- The panel title `...frame-preferred elevation` is legacy naming; current logic uses TLE pass max elevation from state.
+- `Success by frequency band` is still pass-based, but uses its own frequency-band pass logic.
 
 ## 5) How NOT_CONFIRMED is Defined
 
 `NOT_CONFIRMED` is not "CRC count".
 
 For pass-based panels it means:
-- A pass exists in state timeline for a catalog satellite,
-- but no confirmed frame is present in that same pass.
+- A TLE-defined pass exists in state data for a tracked NORAD in selected time range,
+- but no confirmed frame maps to the same TLE pass key.
 
 So:
-- `NOT_CONFIRMED` comes from pass tracking (`begine`/state), not from CRC errors.
+- `NOT_CONFIRMED` comes from TLE pass tracking in state data, not from CRC errors.
 
 ## 6) Probability Formula
 
@@ -172,6 +176,7 @@ So:
 
 It uses the same pass set and same `CONFIRMED/NOT_CONFIRMED` definition as:
 - `Passes by max elevation bin (begine, frame-preferred elevation)`
+- `TEMP: NOT_CONFIRMED passes detail`
 
 ## 7) Why Some Counts Can Differ
 
@@ -180,8 +185,9 @@ Counts can differ between packet panels and pass panels because:
 - Packet panels count frames.
 - Pass panels count passes.
 - Unique satellite stats count satellites.
-- Time range affects state and frame events, while catalog may be all-time.
+- Time range affects both state pass candidates and confirmed frame matches.
 - Ingest filters (dedupe, no-satellite CRC drop, max slant range) remove records before storage.
+- TLE AOS/LOS values can drift slightly; near integer-second boundaries this can occasionally split one physical flyby into two adjacent pass keys.
 
 ## 8) Editing and Deploying Dashboard
 
@@ -203,7 +209,8 @@ Recommended workflow:
   - Check `confirmed_satellites.json` persistence and service permissions.
 
 - Pass charts look too low/high:
-  - Verify selected time range contains enough `tinygs_state` points.
+  - Verify selected time range contains enough `tinygs_state` points with `tle_pass_*` fields.
+  - Verify confirmed frames include `tracked_norad`, `tle_pass_aos_unix_s`, and `tle_pass_los_unix_s` for pass matching.
   - Confirm dedupe and max slant range settings are expected.
 
 - Frequency in packet table looks unexpected:

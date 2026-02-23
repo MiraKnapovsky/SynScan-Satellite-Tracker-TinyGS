@@ -2,11 +2,9 @@
 """TLE-based satellite lookup and geometry helpers for MQTT listener."""
 
 import math
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-
-from mqtt_filters import normalize_sat_name
 
 
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -39,9 +37,9 @@ class SatelliteLocator:
 
         self.observer = wgs84.latlon(gateway_lat, gateway_lon, elevation_m=gateway_alt_m)
         self.satellites: List[Any] = []
-        self.by_exact: Dict[str, Any] = {}
-        self.by_norm: Dict[str, Any] = {}
+        self.by_norad: Dict[int, Any] = {}
         self.tle_mtime_ns: Optional[int] = None
+        self.pass_cache: Dict[int, Dict[str, float]] = {}
         self.reload(force=True)
 
     def _parse_tle_file(self) -> List[Any]:
@@ -71,24 +69,23 @@ class SatelliteLocator:
             return
 
         sats = self._parse_tle_file()
-        by_exact: Dict[str, Any] = {}
-        by_norm: Dict[str, Any] = {}
+        by_norad: Dict[int, Any] = {}
         for sat in sats:
-            name = str(getattr(sat, "name", "") or "").strip()
-            if not name:
+            try:
+                satnum = int(getattr(getattr(sat, "model", None), "satnum", 0))
+            except (TypeError, ValueError):
                 continue
-            by_exact.setdefault(name.casefold(), sat)
-            norm = normalize_sat_name(name)
-            if norm:
-                by_norm.setdefault(norm, sat)
+            if satnum <= 0:
+                continue
+            by_norad.setdefault(satnum, sat)
 
         self.satellites = sats
-        self.by_exact = by_exact
-        self.by_norm = by_norm
+        self.by_norad = by_norad
         self.tle_mtime_ns = st.st_mtime_ns
+        self.pass_cache.clear()
 
-    def find_satellite(self, sat_name: str) -> Optional[Any]:
-        if not sat_name:
+    def find_satellite(self, norad_id: Optional[int]) -> Optional[Any]:
+        if norad_id is None:
             return None
 
         try:
@@ -96,26 +93,114 @@ class SatelliteLocator:
         except OSError:
             return None
 
-        exact = sat_name.strip().casefold()
-        if exact in self.by_exact:
-            return self.by_exact[exact]
+        try:
+            norad_int = int(norad_id)
+        except (TypeError, ValueError):
+            return None
+        if norad_int <= 0:
+            return None
+        return self.by_norad.get(norad_int)
 
-        norm = normalize_sat_name(sat_name)
-        if norm in self.by_norm:
-            return self.by_norm[norm]
+    @staticmethod
+    def _as_utc(dt: datetime) -> datetime:
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
 
-        if norm:
-            collapsed = norm.replace("-", "")
-            for key, sat in self.by_norm.items():
-                if norm in key or key in norm:
-                    return sat
-                if collapsed and (collapsed in key.replace("-", "") or key.replace("-", "") in collapsed):
-                    return sat
-        return None
+    def _predict_pass_peak(self, sat: Any, when_dt: datetime) -> Optional[Dict[str, float]]:
+        try:
+            satnum = int(getattr(getattr(sat, "model", None), "satnum", 0))
+        except (TypeError, ValueError):
+            return None
+        if satnum <= 0:
+            return None
 
-    def locate(self, sat_name: str, when_dt: datetime) -> Dict[str, Any]:
+        when_utc = self._as_utc(when_dt)
+        when_ts = float(when_utc.timestamp())
+        cached = self.pass_cache.get(satnum)
+        if cached and cached.get("valid_from_ts", 0.0) <= when_ts <= cached.get("valid_to_ts", 0.0):
+            return cached
+
+        t0 = self.ts.from_datetime(when_utc - timedelta(hours=4))
+        t1 = self.ts.from_datetime(when_utc + timedelta(hours=4))
+        try:
+            times, events = sat.find_events(self.observer, t0, t1, altitude_degrees=0.0)
+        except Exception:
+            return None
+
+        event_rows: List[Dict[str, Any]] = []
+        for ti, ev in zip(times, events):
+            ev_dt = ti.utc_datetime().replace(tzinfo=timezone.utc)
+            try:
+                topocentric = (sat - self.observer).at(ti)
+                alt = float(topocentric.altaz()[0].degrees)
+            except Exception:
+                alt = -999.0
+            event_rows.append({"dt": ev_dt, "ev": int(ev), "alt": alt})
+
+        if not event_rows:
+            return None
+
+        passes: List[Dict[str, Any]] = []
+        aos_row: Optional[Dict[str, Any]] = None
+        culm_row: Optional[Dict[str, Any]] = None
+        for row in event_rows:
+            ev = row["ev"]
+            if ev == 0:
+                aos_row = row
+                culm_row = None
+            elif ev == 1:
+                if aos_row is not None:
+                    culm_row = row
+            elif ev == 2:
+                if aos_row is None:
+                    continue
+                if culm_row is None:
+                    culm_row = row
+                passes.append(
+                    {
+                        "aos_dt": aos_row["dt"],
+                        "culm_dt": culm_row["dt"],
+                        "los_dt": row["dt"],
+                        "max_el_deg": float(culm_row["alt"]),
+                    }
+                )
+                aos_row = None
+                culm_row = None
+
+        selected: Optional[Dict[str, Any]] = None
+        if passes:
+            for p in passes:
+                if p["aos_dt"] <= when_utc <= p["los_dt"]:
+                    selected = p
+                    break
+            if selected is None:
+                selected = min(passes, key=lambda p: abs((p["culm_dt"] - when_utc).total_seconds()))
+        else:
+            culms = [r for r in event_rows if r["ev"] == 1]
+            if not culms:
+                return None
+            c = min(culms, key=lambda r: abs((r["dt"] - when_utc).total_seconds()))
+            selected = {"aos_dt": c["dt"], "culm_dt": c["dt"], "los_dt": c["dt"], "max_el_deg": float(c["alt"])}
+
+        aos_ts = float(selected["aos_dt"].timestamp())
+        culm_ts = float(selected["culm_dt"].timestamp())
+        los_ts = float(selected["los_dt"].timestamp())
+        out = {
+            "tle_pass_max_el_deg": float(selected["max_el_deg"]),
+            "tle_pass_aos_unix_s": aos_ts,
+            "tle_pass_culm_unix_s": culm_ts,
+            "tle_pass_los_unix_s": los_ts,
+            "tle_pass_duration_s": max(0.0, los_ts - aos_ts),
+            "valid_from_ts": aos_ts - 600.0,
+            "valid_to_ts": los_ts + 600.0,
+        }
+        self.pass_cache[satnum] = out
+        return out
+
+    def locate(self, norad_id: Optional[int], when_dt: datetime) -> Dict[str, Any]:
         out: Dict[str, Any] = {"tle_found": False}
-        sat = self.find_satellite(sat_name)
+        sat = self.find_satellite(norad_id)
         if sat is None:
             return out
 
@@ -131,6 +216,7 @@ class SatelliteLocator:
             {
                 "tle_found": True,
                 "tle_satellite": str(getattr(sat, "name", "") or "").strip(),
+                "tle_norad": int(getattr(getattr(sat, "model", None), "satnum", 0)),
                 "sat_lat_deg": sat_lat,
                 "sat_lon_deg": sat_lon,
                 "sat_alt_km": float(subpoint.elevation.km),
@@ -140,4 +226,15 @@ class SatelliteLocator:
                 "ground_distance_km": haversine_km(self.gateway_lat, self.gateway_lon, sat_lat, sat_lon),
             }
         )
+        pass_peak = self._predict_pass_peak(sat=sat, when_dt=when_dt)
+        if pass_peak:
+            out.update(
+                {
+                    "tle_pass_max_el_deg": float(pass_peak["tle_pass_max_el_deg"]),
+                    "tle_pass_aos_unix_s": float(pass_peak["tle_pass_aos_unix_s"]),
+                    "tle_pass_culm_unix_s": float(pass_peak["tle_pass_culm_unix_s"]),
+                    "tle_pass_los_unix_s": float(pass_peak["tle_pass_los_unix_s"]),
+                    "tle_pass_duration_s": float(pass_peak["tle_pass_duration_s"]),
+                }
+            )
         return out
