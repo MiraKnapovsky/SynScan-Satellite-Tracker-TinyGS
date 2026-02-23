@@ -89,7 +89,7 @@ python3 import_requests.py
 5. Configure tracker in `synscan_config.json`:
 - First safe setup: keep `dummy: true`.
 - Real movement later: set `dummy: false` and confirm `port`, `lat`, `lon`, `alt`.
-- Target selection is NORAD-only from `state.json` key `NORAD` (satellite name is informational only).
+- Target selection reads `NORAD` from `state.json`.
 - When `NORAD` is missing in `state.json`, tracker switches to surveillance/neutral position.
 - Keep `state` and `status_file` paths pointing to this project directory.
 
