@@ -89,6 +89,9 @@ python3 import_requests.py
 5. Configure tracker in `synscan_config.json`:
 - First safe setup: keep `dummy: true`.
 - Real movement later: set `dummy: false` and confirm `port`, `lat`, `lon`, `alt`.
+- Tracker runs in `state` mode only (no `max` / `name` runtime selection).
+- Target selection is NORAD-only from `state.json` key `NORAD` (satellite name is informational only).
+- When `NORAD` is missing in `state.json`, tracker switches to surveillance/neutral position.
 - Keep `state` and `status_file` paths pointing to this project directory.
 
 6. Load listener credentials into current shell:
@@ -217,13 +220,17 @@ Detailed dashboard documentation:
 - `port`: serial port path (for real mode), e.g. `/dev/ttyUSB0`.
 - `lat`, `lon`, `alt`: observer location.
 - `tle`: path to TLE file.
-- `mode`: `state`, `max`, or `name`.
-- `state`: path to state file (used in `state` mode).
+- `mode`: fixed to `state` by runner.
+- `state`: path to TinyGS state file (`state.json`) used for NORAD target selection.
 - `min_el`: minimum elevation threshold.
 - `interval`: control loop period in seconds.
 - `lead`: prediction lead time in seconds.
 - `wrap_limit`, `wrap_margin`, `plan_horizon`, `plan_step`, `az_home`: cable-wrap planning controls.
 - `status_file`, `status_every`: tracker status JSON path and write interval.
+
+Web UI note:
+- Some advanced/path fields are intentionally hidden in `/config` (`tle`, `state`, `status_file`, `interval`, `status_every`).
+- Hidden fields are preserved from existing `synscan_config.json` when saving.
 
 ## Web Auth
 
@@ -233,6 +240,11 @@ Detailed dashboard documentation:
 - `SYNSCAN_WEB_USER`: optional username. If empty, only password is checked.
 - `SYNSCAN_WEB_HOST`: optional bind host (default: `158.196.240.175`).
 - `SYNSCAN_WEB_PORT`: optional bind port (default: `8080`).
+
+POST protection:
+- All web `POST` actions use CSRF protection.
+- Browser form actions work normally.
+- Custom API clients must send `X-CSRF-Token` matching the `synscan_csrf` cookie.
 
 ## Services
 
