@@ -174,6 +174,8 @@ python3 synscan_web.py
 Open `http://127.0.0.1:8080/config` locally.
 If you set `SYNSCAN_WEB_HOST=0.0.0.0`, open `http://<debian-host-ip>:8080/config` from another machine.
 
+![SynScan web UI screenshot](synscan_tracker.png)
+
 11. Optional: install the template systemd units after the manual test passes:
 
 ```bash
@@ -223,6 +225,8 @@ sudo systemctl status mqtt_tinygs_listen@$(whoami).service
 
 - Measurement `tinygs_state`: data from topic `cmnd/begine` (mode, freq, bw, sf, cr, NORAD, ...).
 - Measurement `tinygs_frame`: data from topic `cmnd/frame/0` (satellite, RSSI, SNR, freq error, confirmed/crc_error).
+
+![Grafana dashboard screenshot](grafana.png)
 
 Configuration is via env vars (already loaded by `mqtt_tinygs_listen@.service`):
 
