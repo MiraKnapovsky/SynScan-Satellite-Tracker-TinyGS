@@ -1,0 +1,144 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="860" viewBox="0 0 1200 860" role="img" aria-labelledby="title desc">
+  <title id="title">SynScan TinyGS Tracker system setup</title>
+  <desc id="desc">Block diagram showing satellites, directional and omnidirectional antennas, ESP32 LoRa receivers, Raspberry Pi, SynScan rotator and hand controller, and TinyGS server.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M1,1 L11,6 L1,11 Z" fill="#1f3f8f"/>
+    </marker>
+    <marker id="dashedArrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M1,1 L11,6 L1,11 Z" fill="#5a5a5a"/>
+    </marker>
+    <style>
+      .bg { fill: #f7f5ef; }
+      .panel { fill: #ffffff; stroke: #1d1d1d; stroke-width: 2.2; rx: 18; ry: 18; }
+      .node { fill: #fdfdfd; stroke: #1d1d1d; stroke-width: 2.2; rx: 16; ry: 16; }
+      .accent { fill: #edf3ff; stroke: #1f3f8f; stroke-width: 2.4; rx: 16; ry: 16; }
+      .tinygs { fill: #fff7ea; stroke: #c57d00; stroke-width: 2.4; rx: 16; ry: 16; }
+      .radio { fill: none; stroke: #2447d5; stroke-width: 3; }
+      .solid { fill: none; stroke: #1f3f8f; stroke-width: 3.2; marker-end: url(#arrow); }
+      .dashed { fill: none; stroke: #5a5a5a; stroke-width: 2.4; stroke-dasharray: 8 8; marker-end: url(#dashedArrow); }
+      .thin { fill: none; stroke: #1f3f8f; stroke-width: 2.2; }
+      .label { font: 700 24px 'DejaVu Sans', sans-serif; fill: #111; }
+      .text { font: 500 20px 'DejaVu Sans', sans-serif; fill: #111; }
+      .small { font: 500 18px 'DejaVu Sans', sans-serif; fill: #333; }
+      .tiny { font: 500 16px 'DejaVu Sans', sans-serif; fill: #444; }
+      .bullet { font: 500 17px 'DejaVu Sans', sans-serif; fill: #111; }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1200" height="860"/>
+
+  <text class="label" x="600" y="58" text-anchor="middle">SynScan TinyGS Tracker Setup</text>
+  <text class="small" x="600" y="88" text-anchor="middle">Directional station with rotator + optional passive omnidirectional station</text>
+
+  <g transform="translate(450,120)">
+    <circle cx="55" cy="24" r="18" fill="#2447d5"/>
+    <rect x="45" y="38" width="20" height="70" rx="8" fill="#2447d5"/>
+    <rect x="20" y="48" width="35" height="12" transform="rotate(-35 20 48)" fill="#2447d5"/>
+    <rect x="58" y="48" width="35" height="12" transform="rotate(35 58 48)" fill="#2447d5"/>
+    <path class="radio" d="M4 78 C18 78 26 92 26 104"/>
+    <path class="radio" d="M-8 74 C12 74 24 95 24 118"/>
+    <path class="radio" d="M106 78 C92 78 84 92 84 104"/>
+    <path class="radio" d="M118 74 C98 74 86 95 86 118"/>
+  </g>
+
+  <g transform="translate(640,120)">
+    <circle cx="55" cy="24" r="18" fill="#2447d5"/>
+    <rect x="45" y="38" width="20" height="70" rx="8" fill="#2447d5"/>
+    <rect x="20" y="48" width="35" height="12" transform="rotate(-35 20 48)" fill="#2447d5"/>
+    <rect x="58" y="48" width="35" height="12" transform="rotate(35 58 48)" fill="#2447d5"/>
+    <path class="radio" d="M4 78 C18 78 26 92 26 104"/>
+    <path class="radio" d="M-8 74 C12 74 24 95 24 118"/>
+    <path class="radio" d="M106 78 C92 78 84 92 84 104"/>
+    <path class="radio" d="M118 74 C98 74 86 95 86 118"/>
+  </g>
+
+  <text class="label" x="600" y="230" text-anchor="middle">Satellites supported by the TinyGS network</text>
+  <text class="text" x="600" y="265" text-anchor="middle">LoRa RF downlink</text>
+
+  <rect class="node" x="75" y="270" width="250" height="180"/>
+  <text class="label" x="200" y="305" text-anchor="middle">Rotator</text>
+  <path class="thin" d="M125 400 C145 330 255 325 250 400"/>
+  <path class="thin" d="M145 400 C170 350 230 350 255 400"/>
+  <path class="thin" d="M150 400 L110 445"/>
+  <path class="thin" d="M250 400 L290 445"/>
+  <circle class="thin" cx="200" cy="335" r="35"/>
+  <path class="thin" d="M180 355 C205 300 260 320 235 378"/>
+
+  <rect class="node" x="170" y="505" width="150" height="220"/>
+  <text class="label" x="245" y="540" text-anchor="middle">Hand controller</text>
+  <rect class="thin" x="205" y="565" width="80" height="145" rx="18" ry="18"/>
+  <rect class="thin" x="220" y="580" width="50" height="32" rx="4" ry="4"/>
+  <circle class="thin" cx="245" cy="640" r="16"/>
+  <circle class="thin" cx="225" cy="640" r="8"/>
+  <circle class="thin" cx="265" cy="640" r="8"/>
+  <circle class="thin" cx="245" cy="620" r="8"/>
+  <circle class="thin" cx="245" cy="660" r="8"/>
+  <g fill="#1d1d1d">
+    <circle cx="220" cy="685" r="4"/><circle cx="235" cy="685" r="4"/><circle cx="250" cy="685" r="4"/><circle cx="265" cy="685" r="4"/>
+    <circle cx="220" cy="700" r="4"/><circle cx="235" cy="700" r="4"/><circle cx="250" cy="700" r="4"/><circle cx="265" cy="700" r="4"/>
+  </g>
+
+  <rect class="node" x="455" y="405" width="190" height="90"/>
+  <text class="label" x="550" y="440" text-anchor="middle">Directional antenna</text>
+  <path class="thin" d="M490 468 L615 468"/>
+  <path class="thin" d="M490 452 L520 452"/>
+  <path class="thin" d="M520 438 L520 482"/>
+  <path class="thin" d="M540 430 L540 490"/>
+  <path class="thin" d="M560 422 L560 498"/>
+  <path class="thin" d="M580 430 L580 490"/>
+  <path class="thin" d="M600 438 L600 482"/>
+  <path class="thin" d="M490 444 L505 444"/>
+  <path class="thin" d="M490 476 L505 476"/>
+
+  <rect class="node" x="735" y="405" width="170" height="90"/>
+  <text class="label" x="820" y="440" text-anchor="middle">Omnidirectional antenna</text>
+  <ellipse class="thin" cx="820" cy="458" rx="32" ry="10"/>
+  <path class="thin" d="M820 422 L820 492"/>
+  <path class="thin" d="M800 432 C850 454 850 460 800 482"/>
+  <path class="thin" d="M840 432 C790 454 790 460 840 482"/>
+
+  <rect class="accent" x="455" y="565" width="190" height="95"/>
+  <text class="label" x="550" y="603" text-anchor="middle">ESP32 LoRa</text>
+  <text class="text" x="550" y="632" text-anchor="middle">rotator station RX</text>
+  <rect class="thin" x="490" y="642" width="120" height="12" rx="4" ry="4"/>
+
+  <rect class="accent" x="735" y="565" width="190" height="95"/>
+  <text class="label" x="820" y="603" text-anchor="middle">ESP32 LoRa</text>
+  <text class="text" x="820" y="632" text-anchor="middle">passive station RX</text>
+  <rect class="thin" x="770" y="642" width="120" height="12" rx="4" ry="4"/>
+
+  <rect class="panel" x="120" y="705" width="680" height="125"/>
+  <text class="label" x="460" y="748" text-anchor="middle">Raspberry Pi 5 / Debian host</text>
+  <text class="bullet" x="160" y="782">• Wi-Fi access point or LAN uplink</text>
+  <text class="bullet" x="160" y="810">• MQTT data processing, automatic rotator control, InfluxDB, Grafana, web interface</text>
+
+  <rect class="tinygs" x="935" y="665" width="190" height="120"/>
+  <text class="label" x="1030" y="708" text-anchor="middle">TinyGS server</text>
+  <text class="text" x="1030" y="740" text-anchor="middle">MQTT / API backend</text>
+  <text class="tiny" x="1030" y="768" text-anchor="middle">station state, frames, network metadata</text>
+
+  <path class="dashed" d="M535 230 L540 405"/>
+  <path class="dashed" d="M680 230 L565 405"/>
+  <path class="dashed" d="M720 230 L815 405"/>
+  <path class="dashed" d="M555 495 L550 565"/>
+  <path class="dashed" d="M820 495 L820 565"/>
+  <path class="solid" d="M645 612 L735 612"/>
+  <text class="small" x="690" y="596" text-anchor="middle">Wi-Fi / serial bridge</text>
+
+  <path class="solid" d="M550 660 L550 705"/>
+  <path class="solid" d="M820 660 L820 705"/>
+  <text class="small" x="690" y="688" text-anchor="middle">Wi-Fi</text>
+
+  <path class="solid" d="M325 360 L455 450"/>
+  <text class="small" x="375" y="395" text-anchor="middle">mechanical drive</text>
+
+  <path class="solid" d="M245 725 L245 830"/>
+  <path class="solid" d="M245 705 L245 505"/>
+  <text class="small" x="155" y="664" text-anchor="middle">control data</text>
+
+  <path class="solid" d="M800 765 L935 725"/>
+  <text class="small" x="870" y="725" text-anchor="middle">MQTT / API</text>
+
+  <text class="tiny" x="460" y="845" text-anchor="middle">Recommended project split: directional antenna on SynScan rotator + optional passive omnidirectional monitor.</text>
+</svg>
