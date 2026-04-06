@@ -42,7 +42,6 @@ def main():
     if not (-180.0 <= lon <= 180.0): _err("lon mimo rozsah -180..180")
 
     tle = ensure_exists(data.get("tle", ""), "tle")
-    mode = "state"
 
     state = str(data.get("state", str(BASE_DIR / "state.json")))
     ensure_exists(state, "state")
@@ -89,7 +88,6 @@ def main():
         "--lon", str(lon),
         "--alt", str(alt),
         "--tle", tle,
-        "--mode", mode,
         "--min-el", str(min_el),
         "--interval", str(interval),
         "--lead", str(lead),

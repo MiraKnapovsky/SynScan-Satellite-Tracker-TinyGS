@@ -17,10 +17,12 @@ __pycache__/
 # Local runtime/generated files
 *.tmp
 state.json
+state_passive.json
 synscan_status.json
 all_rx.jsonl
 raw/raw_messages.jsonl
 confirmed_satellites.json
+confirmed_satellites_passive.json
 
 # Local virtual environments
 tinygs_mqtt/env/

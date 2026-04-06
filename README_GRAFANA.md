@@ -4,9 +4,11 @@ This document explains what is in the Grafana dashboard and how each chart is ca
 
 Dashboard file:
 - `dashboards/tinygs-overview.json`
+- `dashboards/tinygs-qfh-overview.json`
 
 Provisioned Grafana target:
 - `/var/lib/grafana/dashboards/tinygs-overview.json`
+- `/var/lib/grafana/dashboards/tinygs-qfh-overview.json`
 
 Current dashboard metadata:
 - Title: `Helix Rotator 433MHz`
@@ -15,9 +17,17 @@ Current dashboard metadata:
 - Default time range: `now-12h` to `now`
 - Refresh: every `30s`
 
+QFH dashboard metadata:
+- Title: `QFH 433MHz`
+- UID: `tinygs-qfh-overview`
+- Bucket: `tinygs_kna0047qfh`
+
 ## 1) Data Model
 
-The dashboard reads from one InfluxDB bucket (usually `tinygs`) and uses these measurements:
+The Helix dashboard reads from bucket `tinygs`.
+The QFH dashboard reads from bucket `tinygs_kna0047qfh`.
+
+Both dashboards use these measurements:
 
 - `tinygs_state`
   - Source: TinyGS `cmnd/begine` messages.
@@ -195,11 +205,14 @@ Recommended workflow:
 
 1. Edit:
    - `synscan_tinygs_tracker/dashboards/tinygs-overview.json`
+   - `synscan_tinygs_tracker/dashboards/tinygs-qfh-overview.json`
 2. Validate JSON:
    - `python3 -m json.tool synscan_tinygs_tracker/dashboards/tinygs-overview.json > /dev/null`
+   - `python3 -m json.tool synscan_tinygs_tracker/dashboards/tinygs-qfh-overview.json > /dev/null`
 3. Increment `version` in dashboard JSON.
 4. Deploy to Grafana provisioning path:
    - `sudo cp synscan_tinygs_tracker/dashboards/tinygs-overview.json /var/lib/grafana/dashboards/tinygs-overview.json`
+   - `sudo cp synscan_tinygs_tracker/dashboards/tinygs-qfh-overview.json /var/lib/grafana/dashboards/tinygs-qfh-overview.json`
 5. Refresh Grafana dashboard page.
 
 ## 9) Quick Troubleshooting

@@ -5,7 +5,6 @@
   "lon": 18.162,
   "alt": 261.0,
   "tle": "/home/student/synscan_tinygs_tracker/satellites.tle",
-  "mode": "state",
   "state": "/home/student/synscan_tinygs_tracker/state.json",
   "min_el": 0.0,
   "interval": 0.5,

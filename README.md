@@ -19,7 +19,6 @@ This project tracks satellites with a SynScan mount, using TinyGS MQTT state upd
 - `mqtt_storage.py`: file/catalog/state serialization helpers used by the listener.
 - `mqtt_geo.py`: TLE-based satellite lookup and geometry calculations.
 - `import_requests.py`: downloads supported TinyGS satellites and writes `satellites.tle`.
-- `synscan_manual.py`: interactive manual mount control.
 - `synscan_common.py`: shared serial protocol + az/el conversion utilities.
 
 ## Runtime Files
@@ -201,6 +200,94 @@ sudo systemctl enable --now mqtt_tinygs_listen@alice.service
 sudo systemctl status mqtt_tinygs_listen@alice.service
 ```
 
+## Second MQTT Station (Grafana Only)
+
+This project now has a simple two-station layout:
+
+- Main station: existing `mqtt_tinygs_listen.service` or `mqtt_tinygs_listen@.service`, writes `state.json` for the rotator.
+- Second passive station: new `mqtt_tinygs_listen_passive@.service`, writes to a separate bucket and never affects the rotator.
+
+Prepare env file for the second station:
+
+```bash
+cp /home/<user>/synscan_tinygs_tracker/mqtt_tinygs_listen_passive.env.example \
+  /home/<user>/synscan_tinygs_tracker/mqtt_tinygs_listen_passive.env
+```
+
+MQTT login stays the same as for the rotator station:
+
+- keep the same `TINYGS_USER`
+- keep the same `TINYGS_PASS`
+- change only `TINYGS_STATION` to `KNA0047QFH`
+- use a different `INFLUXDB_BUCKET`
+
+Recommended values for `KNA0047QFH`:
+
+```bash
+TINYGS_USER=1472927374
+TINYGS_STATION=KNA0047QFH
+TINYGS_PASS=YOUR_PASSWORD
+INFLUXDB_URL=http://127.0.0.1:8086
+INFLUXDB_ORG=your-org
+INFLUXDB_BUCKET=tinygs_kna0047qfh
+INFLUXDB_TOKEN=your-token
+INFLUXDB_MEAS_FRAME=tinygs_frame
+INFLUXDB_MEAS_STATE=tinygs_state
+INFLUXDB_MEAS_META=tinygs_meta
+TINYGS_TRACKER_STATUS_FILE=
+```
+
+Fastest setup is usually:
+
+```bash
+cp /home/<user>/synscan_tinygs_tracker/mqtt_tinygs_listen.env \
+  /home/<user>/synscan_tinygs_tracker/mqtt_tinygs_listen_passive.env
+```
+
+Then edit only:
+
+- `TINYGS_STATION=KNA0047QFH`
+- `INFLUXDB_BUCKET=tinygs_kna0047qfh`
+- `TINYGS_TRACKER_STATUS_FILE=`
+
+Manual test run for the second station:
+
+```bash
+set -a
+source /home/<user>/synscan_tinygs_tracker/mqtt_tinygs_listen_passive.env
+set +a
+python3 /home/<user>/synscan_tinygs_tracker/mqtt_tinygs_listen.py \
+  --user "$TINYGS_USER" \
+  --station "$TINYGS_STATION" \
+  --password "$TINYGS_PASS" \
+  --out /home/<user>/synscan_tinygs_tracker/state_passive.json \
+  --confirmed-catalog-out /home/<user>/synscan_tinygs_tracker/confirmed_satellites_passive.json \
+  --frame-topic tinygs/${TINYGS_USER}/${TINYGS_STATION}/cmnd/frame/0
+```
+
+Install and start passive systemd service:
+
+```bash
+sudo cp /home/<user>/synscan_tinygs_tracker/mqtt_tinygs_listen_passive@.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now mqtt_tinygs_listen_passive@$(whoami).service
+sudo systemctl status mqtt_tinygs_listen_passive@$(whoami).service
+```
+
+Useful log command:
+
+```bash
+journalctl -u mqtt_tinygs_listen_passive@$(whoami).service -f
+```
+
+This passive service always:
+
+- writes to `state_passive.json` instead of `state.json`
+- writes its own confirmed catalog to `confirmed_satellites_passive.json`
+- keeps tracker status stamping disabled when `TINYGS_TRACKER_STATUS_FILE=` is empty
+- keeps geo enrichment enabled when gateway location and TLE data are available
+- uses whatever `INFLUXDB_BUCKET` you set in `mqtt_tinygs_listen_passive.env`
+
 Grafana setup:
 
 1. Add data source `InfluxDB` (Flux or InfluxQL according to your Influx setup).
@@ -219,7 +306,6 @@ Detailed dashboard documentation:
 - `port`: serial port path (for real mode), e.g. `/dev/ttyUSB0`.
 - `lat`, `lon`, `alt`: observer location.
 - `tle`: path to TLE file.
-- `mode`: tracking mode key in config.
 - `state`: path to TinyGS state file (`state.json`) used for NORAD target selection.
 - `min_el`: minimum elevation threshold.
 - `interval`: control loop period in seconds.
@@ -252,3 +338,4 @@ If you use service mode, ensure this unit exists and runs `python3 synscan_runne
 
 `mqtt_tinygs_listen.service` is already present in this directory for the TinyGS listener.
 For user-specific deployments without hardcoded `student` paths, use `mqtt_tinygs_listen@.service`.
+For the second passive Grafana-only station, use `mqtt_tinygs_listen_passive@.service`.

@@ -79,7 +79,6 @@ TEMPLATE = r"""
       <div><b>Režim</b></div><div id="ph">?</div>
       <div><b>Cíl</b></div><div id="tgt">?</div>
       <div><b>Az / El </b></div><div><span id="az">?</span>° / <span id="el">?</span>°</div>
-      <div><b>Stavová zpráva</b></div><div id="msg" class="mono">?</div>
       <div><b>Poslední update</b></div><div id="ts">?</div>
       <div><b>Poslední příkaz</b></div><div><span id="cmd" class="mono">?</span> <span id="cmdts" class="small"></span></div>
     </div>
@@ -317,7 +316,7 @@ TEMPLATE = r"""
         if(!s){
           setText('ph','-'); setText('tgt','(zatím žádný synscan_status.json)');
           setText('az','-'); setText('el','-');
-          setText('msg','-'); setText('ts','-');
+          setText('ts','-');
           setText('cmd','-'); setText('cmdts','');
           setText('summary', statusSummary(svc, null));
           return;
@@ -335,7 +334,6 @@ TEMPLATE = r"""
         setNum('cur_el', s.el_user_deg, 1);
         setNum('cur_elm', s.el_mount_deg, 1);
 
-        setText('msg', s.message);
         setText('ts',  s.ts);
 
         setText('cmd', s.last_cmd);
@@ -608,7 +606,6 @@ def config_post():
             "lon": parse_float_field("lon", 0.0),
             "alt": parse_float_field("alt", 0.0),
             "tle": tle_fixed,
-            "mode": "state",
             "state": state_fixed,
             "min_el": parse_float_field("min_el", 10.0),
             "interval": interval_fixed,
