@@ -20,10 +20,17 @@ def as_float(x, name):
     except Exception:
         _err(f"Neplatné číslo pro '{name}': {x!r}")
 
-def ensure_exists(p: str, name: str):
-    path = Path(p)
-    if not path.exists():
-        _err(f"Soubor/cesta pro '{name}' neexistuje: {p}")
+def resolve_config_path(p: str, name: str, *, must_exist: bool = False) -> str:
+    raw = str(p or "").strip()
+    if not raw:
+        _err(f"Chybí cesta pro '{name}'")
+
+    path = Path(raw).expanduser()
+    if not path.is_absolute():
+        path = BASE_DIR / path
+
+    if must_exist and not path.exists():
+        _err(f"Soubor/cesta pro '{name}' neexistuje: {path}")
     return str(path)
 
 def main():
@@ -41,10 +48,9 @@ def main():
     if not (-90.0 <= lat <= 90.0): _err("lat mimo rozsah -90..90")
     if not (-180.0 <= lon <= 180.0): _err("lon mimo rozsah -180..180")
 
-    tle = ensure_exists(data.get("tle", ""), "tle")
+    tle = resolve_config_path(data.get("tle", ""), "tle", must_exist=True)
 
-    state = str(data.get("state", str(BASE_DIR / "state.json")))
-    ensure_exists(state, "state")
+    state = resolve_config_path(data.get("state", "state.json"), "state")
 
     min_el = as_float(data.get("min_el", -10.0), "min_el")
     interval = as_float(data.get("interval", 0.5), "interval")
@@ -63,7 +69,7 @@ def main():
     if plan_step <= 0: _err("plan_step musí být > 0")
 
     # --- status pro web ---
-    status_file = data.get("status_file", str(BASE_DIR / "synscan_status.json"))
+    status_file = data.get("status_file", "synscan_status.json")
     status_every = as_float(data.get("status_every", 1.0), "status_every")
     if status_every <= 0:
         _err("status_every musí být > 0")
@@ -71,6 +77,8 @@ def main():
         status_file = str(status_file).strip()
         if status_file == "":
             status_file = None
+        else:
+            status_file = resolve_config_path(status_file, "status_file")
 
 
     args = [sys.executable, str(SCRIPT)]

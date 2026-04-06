@@ -1,0 +1,18 @@
+[Unit]
+Description=SynScan web UI for user %i
+After=network-online.target synscan-follow-sat@%i.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=%i
+WorkingDirectory=/home/%i/synscan_tinygs_tracker
+EnvironmentFile=/home/%i/synscan_tinygs_tracker/synscan_web.env
+Environment=PYTHONUNBUFFERED=1
+Environment=SYNSCAN_FOLLOW_SERVICE=synscan-follow-sat@%i.service
+ExecStart=/home/%i/synscan_tinygs_tracker/tinygs_mqtt/env/bin/python /home/%i/synscan_tinygs_tracker/synscan_web.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

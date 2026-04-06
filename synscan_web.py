@@ -20,7 +20,7 @@ CONFIG = BASE_DIR / "synscan_config.json"
 STATUS = BASE_DIR / "synscan_status.json"
 STATE  = BASE_DIR / "state.json"
 
-SERVICE = "synscan-follow-sat.service"
+SERVICE = os.getenv("SYNSCAN_FOLLOW_SERVICE", "synscan-follow-sat.service").strip() or "synscan-follow-sat.service"
 CSRF_COOKIE = "synscan_csrf"
 CSRF_FIELD = "csrf_token"
 # If SYNSCAN_WEB_USER is empty, only password is checked (backward compatible).
@@ -40,8 +40,8 @@ def _normalize_web_host(value: str) -> str:
 
 
 WEB_HOST = _normalize_web_host(
-    os.getenv("SYNSCAN_WEB_HOST", "158.196.240.175")
-) or "158.196.240.175"
+    os.getenv("SYNSCAN_WEB_HOST", "127.0.0.1")
+) or "127.0.0.1"
 try:
     WEB_PORT = int(os.getenv("SYNSCAN_WEB_PORT", "8080"))
 except ValueError as exc:
@@ -479,14 +479,20 @@ def service_state() -> dict:
     e = sh(["systemctl", "is-enabled", SERVICE]).stdout.strip()
     return {"active": a, "enabled": e}
 
+def privileged_systemctl(*args: str) -> list[str]:
+    cmd = ["systemctl", *args]
+    if os.geteuid() == 0:
+        return cmd
+    return ["sudo", "-n", *cmd]
+
 def service_start():
-    sh_checked(["sudo", "systemctl", "start", SERVICE])
+    sh_checked(privileged_systemctl("start", SERVICE))
 
 def service_stop():
-    sh_checked(["sudo", "systemctl", "stop", SERVICE])
+    sh_checked(privileged_systemctl("stop", SERVICE))
 
 def service_restart():
-    sh_checked(["sudo", "systemctl", "restart", SERVICE])
+    sh_checked(privileged_systemctl("restart", SERVICE))
 
 def atomic_write_json(path: Path, data: dict):
     tmp = path.with_suffix(".tmp")

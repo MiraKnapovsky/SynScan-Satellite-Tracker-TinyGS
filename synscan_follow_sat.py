@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Main SynScan tracking loop using TLE prediction and TinyGS state targets."""
 # Spouštění (reál):
-# python3 synscan_follow_sat.py --port /dev/ttyUSB0 --lat 49.83 --lon 18.17 --alt 240 --tle satellites.tle --state state.json --min-el 10 --interval 0.5 --lead 0.8 --status-file /home/student/synscan_tinygs_tracker/synscan_status.json
+# python3 synscan_follow_sat.py --port /dev/ttyUSB0 --lat 49.83 --lon 18.17 --alt 240 --tle satellites.tle --state state.json --min-el 10 --interval 0.5 --lead 0.8 --status-file synscan_status.json
 #
 # Spouštění (dummy test bez montáže):
-# python3 synscan_follow_sat.py --dummy --lat 49.83 --lon 18.17 --alt 240 --tle satellites.tle --state state.json --interval 0.5 --lead 0.8 --status-file /home/student/synscan_tinygs_tracker/synscan_status.json
+# python3 synscan_follow_sat.py --dummy --lat 49.83 --lon 18.17 --alt 240 --tle satellites.tle --state state.json --interval 0.5 --lead 0.8 --status-file synscan_status.json
 
 import argparse
 import json
@@ -19,6 +19,8 @@ import serial
 from skyfield.api import EarthSatellite, load, wgs84
 
 from synscan_common import deg_to_hex16, open_port, send_cmd as serial_send_cmd, transform_el
+
+BASE_DIR = Path(__file__).resolve().parent
 
 # ---------- RS-232 ----------
 def send_cmd(ser: Optional[serial.Serial], payload: str, dummy: bool) -> str:
@@ -173,6 +175,13 @@ def atomic_write_json(path: Path, data: Dict[str, Any]) -> None:
 def iso_now() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
+
+def resolve_runtime_path(raw_path: str) -> Path:
+    path = Path(raw_path).expanduser()
+    if not path.is_absolute():
+        path = BASE_DIR / path
+    return path
+
 # ---------- HLAVNÍ ----------
 def main():
     ap = argparse.ArgumentParser()
@@ -216,7 +225,9 @@ def main():
     if not args.dummy and not args.port:
         raise SystemExit("Chybí --port (nebo použij --dummy).")
 
-    status_path = Path(args.status_file) if args.status_file else None
+    tle_path = resolve_runtime_path(args.tle_file)
+    state_path = resolve_runtime_path(args.state_file)
+    status_path = resolve_runtime_path(args.status_file) if args.status_file else None
     status_last = 0.0
 
     last_cmd: Optional[str] = None
@@ -249,8 +260,8 @@ def main():
             "lat": args.lat,
             "lon": args.lon,
             "alt": args.alt,
-            "tle": str(args.tle_file),
-            "state_file": str(args.state_file),
+            "tle": str(tle_path),
+            "state_file": str(state_path),
             "min_el": float(args.min_el),
             "interval": float(args.interval),
             "lead": float(args.lead),
@@ -287,8 +298,8 @@ def main():
             pass
         status_last = now_m
 
-    sats = load_tles(Path(args.tle_file))
-    print(f"Načteno {len(sats)} satelitů ze souboru {args.tle_file}")
+    sats = load_tles(tle_path)
+    print(f"Načteno {len(sats)} satelitů ze souboru {tle_path}")
 
     # mapování NORAD -> satelit (Skyfield: sat.model.satnum)
     sats_by_norad: Dict[int, EarthSatellite] = {}
@@ -321,7 +332,6 @@ def main():
     unwind_active: bool = False
 
     # state cache
-    state_path = Path(args.state_file)
     last_state_mtime = None
     desired_norad: Optional[int] = None
     desired_sat_str: Optional[str] = None

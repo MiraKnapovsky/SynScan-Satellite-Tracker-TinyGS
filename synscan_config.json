@@ -4,8 +4,8 @@
   "lat": 49.831,
   "lon": 18.162,
   "alt": 261.0,
-  "tle": "/home/student/synscan_tinygs_tracker/satellites.tle",
-  "state": "/home/student/synscan_tinygs_tracker/state.json",
+  "tle": "satellites.tle",
+  "state": "state.json",
   "min_el": 0.0,
   "interval": 0.5,
   "lead": 0.8,
@@ -14,6 +14,6 @@
   "plan_horizon": 2400.0,
   "plan_step": 2.0,
   "az_home": 0.0,
-  "status_file": "/home/student/synscan_tinygs_tracker/synscan_status.json",
+  "status_file": "synscan_status.json",
   "status_every": 1.0
 }
