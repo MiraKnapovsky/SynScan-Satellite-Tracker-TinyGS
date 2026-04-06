@@ -1,0 +1,33 @@
+# Secrets and local environment
+mqtt_tinygs_listen.env
+*.env
+!.env.example
+!*.env.example
+*.pem
+*.crt
+*.cer
+*.key
+*.p12
+*.pfx
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Local runtime/generated files
+*.tmp
+satellites.tle
+state.json
+state_passive.json
+synscan_status.json
+all_rx.jsonl
+raw/raw_messages.jsonl
+confirmed_satellites.json
+confirmed_satellites_passive.json
+
+# Local virtual environments
+tinygs_mqtt/env/
+tinygs_mqtt/env.bak-20260127/
+
+# Embedded external git repo (keep out of this repo history)
+tinygs_mqtt/tinyGS/
