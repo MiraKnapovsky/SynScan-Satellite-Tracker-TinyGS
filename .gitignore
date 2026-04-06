@@ -16,6 +16,7 @@ __pycache__/
 
 # Local runtime/generated files
 *.tmp
+satellites.tle
 state.json
 state_passive.json
 synscan_status.json
