@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Main SynScan tracking loop using TLE prediction and TinyGS state targets."""
 # Spouštění (reál):
-# python3 synscan_follow_sat.py --port /dev/ttyUSB0 --lat 49.83 --lon 18.17 --alt 240 --tle satellites.tle --mode state --state state.json --min-el 10 --interval 0.5 --lead 0.8 --status-file /home/student/synscan_tinygs_tracker/synscan_status.json
+# python3 synscan_follow_sat.py --port /dev/ttyUSB0 --lat 49.83 --lon 18.17 --alt 240 --tle satellites.tle --state state.json --min-el 10 --interval 0.5 --lead 0.8 --status-file synscan_status.json
 #
 # Spouštění (dummy test bez montáže):
-# python3 synscan_follow_sat.py --dummy --lat 49.83 --lon 18.17 --alt 240 --tle satellites.tle --mode state --state state.json --interval 0.5 --lead 0.8 --status-file /home/student/synscan_tinygs_tracker/synscan_status.json
+# python3 synscan_follow_sat.py --dummy --lat 49.83 --lon 18.17 --alt 240 --tle satellites.tle --state state.json --interval 0.5 --lead 0.8 --status-file synscan_status.json
 
 import argparse
 import json
@@ -20,7 +20,7 @@ from skyfield.api import EarthSatellite, load, wgs84
 
 from synscan_common import deg_to_hex16, open_port, send_cmd as serial_send_cmd, transform_el
 
-SWITCH_HYSTERESIS = 2.0             # (používá se jen v režimu max)
+BASE_DIR = Path(__file__).resolve().parent
 
 # ---------- RS-232 ----------
 def send_cmd(ser: Optional[serial.Serial], payload: str, dummy: bool) -> str:
@@ -175,6 +175,13 @@ def atomic_write_json(path: Path, data: Dict[str, Any]) -> None:
 def iso_now() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
+
+def resolve_runtime_path(raw_path: str) -> Path:
+    path = Path(raw_path).expanduser()
+    if not path.is_absolute():
+        path = BASE_DIR / path
+    return path
+
 # ---------- HLAVNÍ ----------
 def main():
     ap = argparse.ArgumentParser()
@@ -186,10 +193,8 @@ def main():
     ap.add_argument('--alt', type=float, default=0.0)
     ap.add_argument('--tle', dest='tle_file', required=True)
 
-    ap.add_argument('--mode', choices=['name','max','state'], default='max')
-    ap.add_argument('--name', dest='name_sub')
     ap.add_argument('--state', dest='state_file', default='state.json',
-                    help='Cesta k state.json (pro --mode state)')
+                    help='Cesta k state.json pro NORAD target selection')
 
     ap.add_argument('--min-el', type=float, default=-10.0)
     ap.add_argument('--interval', type=float, default=0.5)
@@ -220,7 +225,9 @@ def main():
     if not args.dummy and not args.port:
         raise SystemExit("Chybí --port (nebo použij --dummy).")
 
-    status_path = Path(args.status_file) if args.status_file else None
+    tle_path = resolve_runtime_path(args.tle_file)
+    state_path = resolve_runtime_path(args.state_file)
+    status_path = resolve_runtime_path(args.status_file) if args.status_file else None
     status_last = 0.0
 
     last_cmd: Optional[str] = None
@@ -247,14 +254,14 @@ def main():
             "ts": iso_now(),
             "phase": phase,                 # tracking / center / wait_rise / below_min_el / no_target / state_no_target / starting / stopped
             "message": message,             # lidsky čitelné (pro web)
-            "mode": args.mode,
+            "mode": "state",
             "dummy": bool(args.dummy),
             "port": None if args.dummy else args.port,
             "lat": args.lat,
             "lon": args.lon,
             "alt": args.alt,
-            "tle": str(args.tle_file),
-            "state_file": str(args.state_file),
+            "tle": str(tle_path),
+            "state_file": str(state_path),
             "min_el": float(args.min_el),
             "interval": float(args.interval),
             "lead": float(args.lead),
@@ -291,8 +298,8 @@ def main():
             pass
         status_last = now_m
 
-    sats = load_tles(Path(args.tle_file))
-    print(f"Načteno {len(sats)} satelitů ze souboru {args.tle_file}")
+    sats = load_tles(tle_path)
+    print(f"Načteno {len(sats)} satelitů ze souboru {tle_path}")
 
     # mapování NORAD -> satelit (Skyfield: sat.model.satnum)
     sats_by_norad: Dict[int, EarthSatellite] = {}
@@ -325,7 +332,6 @@ def main():
     unwind_active: bool = False
 
     # state cache
-    state_path = Path(args.state_file)
     last_state_mtime = None
     desired_norad: Optional[int] = None
     desired_sat_str: Optional[str] = None
@@ -351,79 +357,45 @@ def main():
             t_now = ts.now()
             t_target = t_now + args.lead/86400.0
 
-            # --- Režim STATE: načti state.json jen když se změnil ---
-            if args.mode == 'state':
-                try:
-                    mtime = state_path.stat().st_mtime
-                except FileNotFoundError:
-                    mtime = None
+            try:
+                mtime = state_path.stat().st_mtime
+            except FileNotFoundError:
+                mtime = None
 
-                if mtime is not None and mtime != last_state_mtime:
-                    last_state_mtime = mtime
-                    desired_norad, desired_sat_str = read_state(state_path)
-                    state_has_any_key = desired_norad is not None
-                    desired_sat_obj = pick_sat_from_state(sats_by_norad, desired_norad)
+            if mtime is not None and mtime != last_state_mtime:
+                last_state_mtime = mtime
+                desired_norad, desired_sat_str = read_state(state_path)
+                state_has_any_key = desired_norad is not None
+                desired_sat_obj = pick_sat_from_state(sats_by_norad, desired_norad)
 
-                    if desired_norad is not None:
-                        if desired_sat_obj:
-                            print(
-                                f"\n[STATE] Cíl: NORAD={desired_norad} -> TLE='{desired_sat_obj.name}' "
-                                f"(state sat='{desired_sat_str}')"
-                            )
-                        else:
-                            print(
-                                f"\n[STATE] Cíl nenalezen v TLE: NORAD={desired_norad} "
-                                f"(state sat='{desired_sat_str}')"
-                            )
+                if desired_norad is not None:
+                    if desired_sat_obj:
+                        print(
+                            f"\n[STATE] Cíl: NORAD={desired_norad} -> TLE='{desired_sat_obj.name}' "
+                            f"(state sat='{desired_sat_str}')"
+                        )
                     else:
                         print(
-                            f"\n[STATE] state.json nemá NORAD -> surveillance/neutral režim "
-                            f"(Az={args.az_home}°, El={args.center_el}°)"
+                            f"\n[STATE] Cíl nenalezen v TLE: NORAD={desired_norad} "
+                            f"(state sat='{desired_sat_str}')"
                         )
+                else:
+                    print(
+                        f"\n[STATE] state.json nemá NORAD -> surveillance/neutral režim "
+                        f"(Az={args.az_home}°, El={args.center_el}°)"
+                    )
 
             # --- výběr cíle ---
             target_sat: Optional[EarthSatellite] = None
             do_center = False
 
-            if args.mode == 'name':
-                key = (args.name_sub or '').lower()
-                for s in sats:
-                    if key and key in s.name.lower():
-                        target_sat = s
-                        break
-
-            elif args.mode == 'max':
-                best_s, best_e = None, -999.0
-                for s in sats:
-                    e, _ = altaz_deg(s, observer, t_target)
-                    if e > best_e:
-                        best_e, best_s = e, s
-
-                if tracked is None:
-                    if best_e >= args.min_el:
-                        target_sat = best_s
-                else:
-                    curr_e, _ = altaz_deg(tracked, observer, t_target)
-                    if curr_e < args.min_el:
-                        if best_e >= args.min_el:
-                            print(f"\n[!] {tracked.name} zapadl pod {args.min_el}°. Přepínám na {best_s.name}.")
-                            target_sat = best_s
-                        else:
-                            tracked = None
-                    elif best_s != tracked and best_e > (curr_e + SWITCH_HYSTERESIS):
-                        print(f"\n[▲] Lepší cíl: {best_s.name} ({best_e:.1f}°) > {tracked.name} o >{SWITCH_HYSTERESIS}°")
-                        target_sat = best_s
-                    else:
-                        target_sat = tracked
-
-            else:  # state
-                if desired_norad is None:
+            if desired_norad is None:
+                tracked = None
+                do_center = True
+            else:
+                target_sat = desired_sat_obj
+                if target_sat is None:
                     tracked = None
-                    do_center = True
-                else:
-                    target_sat = desired_sat_obj
-                    if target_sat is None:
-                        tracked = None
 
             # --- CENTER režim: neutrální pozice az_home + center_el ---
             if do_center:
@@ -522,8 +494,8 @@ def main():
                     else:
                         unwind_active = False
 
-                # v režimu name/state: když sat pod horizontem, jen čekej
-                if args.mode in ('name', 'state') and el_u < 0:
+                # Když satelit ještě není nad horizontem, jen čekej.
+                if el_u < 0:
                     msg = f"({tracked.name}) Čekám na východ... ({el_u:5.1f}°)"
                     sys.stdout.write(f"\r{msg}  ")
                     sys.stdout.flush()
@@ -544,8 +516,8 @@ def main():
                     time.sleep(1)
                     continue
 
-                # v režimu state: když není nad min-el, neotáčej
-                if args.mode == 'state' and el_u < args.min_el:
+                # Když satelit není nad min-el, neotáčej.
+                if el_u < args.min_el:
                     msg = f"[STATE] ({tracked.name[:18]}) pod min-el {args.min_el}°: {el_u:5.1f}°"
                     sys.stdout.write(f"\r{msg:80s}")
                     sys.stdout.flush()
@@ -612,10 +584,7 @@ def main():
                     )
 
             else:
-                if args.mode == 'state':
-                    msg = "[STATE] Žádný platný cíl z state.json / nenalezen v TLE..."
-                else:
-                    msg = f"Žádný satelit nad {args.min_el}°..."
+                msg = "[STATE] Žádný platný cíl z state.json / nenalezen v TLE..."
 
                 sys.stdout.write(f"\r{msg:80s}")
                 sys.stdout.flush()

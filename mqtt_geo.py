@@ -2,9 +2,14 @@
 """TLE-based satellite lookup and geometry helpers for MQTT listener."""
 
 import math
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+from mqtt_filters import sat_dedupe_key
+
+COMPACT_NAME_RE = re.compile(r"[^a-z0-9]+")
 
 
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -38,9 +43,15 @@ class SatelliteLocator:
         self.observer = wgs84.latlon(gateway_lat, gateway_lon, elevation_m=gateway_alt_m)
         self.satellites: List[Any] = []
         self.by_norad: Dict[int, Any] = {}
+        self.by_name: Dict[str, int] = {}
+        self.by_compact_name: Dict[str, int] = {}
         self.tle_mtime_ns: Optional[int] = None
         self.pass_cache: Dict[int, Dict[str, float]] = {}
         self.reload(force=True)
+
+    @staticmethod
+    def _compact_name_key(name: str) -> str:
+        return COMPACT_NAME_RE.sub("", str(name or "").strip().lower())
 
     def _parse_tle_file(self) -> List[Any]:
         if not self.tle_path.exists():
@@ -70,6 +81,8 @@ class SatelliteLocator:
 
         sats = self._parse_tle_file()
         by_norad: Dict[int, Any] = {}
+        by_name: Dict[str, int] = {}
+        by_compact_name: Dict[str, int] = {}
         for sat in sats:
             try:
                 satnum = int(getattr(getattr(sat, "model", None), "satnum", 0))
@@ -78,9 +91,18 @@ class SatelliteLocator:
             if satnum <= 0:
                 continue
             by_norad.setdefault(satnum, sat)
+            sat_name = str(getattr(sat, "name", "") or "").strip()
+            sat_key = sat_dedupe_key(sat_name)
+            if sat_key:
+                by_name.setdefault(sat_key, satnum)
+            compact_key = self._compact_name_key(sat_name)
+            if compact_key:
+                by_compact_name.setdefault(compact_key, satnum)
 
         self.satellites = sats
         self.by_norad = by_norad
+        self.by_name = by_name
+        self.by_compact_name = by_compact_name
         self.tle_mtime_ns = st.st_mtime_ns
         self.pass_cache.clear()
 
@@ -100,6 +122,39 @@ class SatelliteLocator:
         if norad_int <= 0:
             return None
         return self.by_norad.get(norad_int)
+
+    def find_norad_by_name(self, sat_name: Optional[str]) -> Optional[int]:
+        if not sat_name:
+            return None
+
+        try:
+            self.reload(force=False)
+        except OSError:
+            return None
+
+        sat_key = sat_dedupe_key(str(sat_name))
+        if not sat_key:
+            sat_key = ""
+        norad_id = self.by_name.get(sat_key)
+        if norad_id is not None:
+            return norad_id
+
+        compact_key = self._compact_name_key(str(sat_name))
+        if not compact_key:
+            return None
+
+        norad_id = self.by_compact_name.get(compact_key)
+        if norad_id is not None:
+            return norad_id
+
+        prefix_matches = {
+            candidate_norad
+            for key, candidate_norad in self.by_compact_name.items()
+            if key.startswith(compact_key) or compact_key.startswith(key)
+        }
+        if len(prefix_matches) == 1:
+            return next(iter(prefix_matches))
+        return None
 
     @staticmethod
     def _as_utc(dt: datetime) -> datetime:

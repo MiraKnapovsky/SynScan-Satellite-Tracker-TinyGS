@@ -20,7 +20,7 @@ CONFIG = BASE_DIR / "synscan_config.json"
 STATUS = BASE_DIR / "synscan_status.json"
 STATE  = BASE_DIR / "state.json"
 
-SERVICE = "synscan-follow-sat.service"
+SERVICE = os.getenv("SYNSCAN_FOLLOW_SERVICE", "synscan-follow-sat.service").strip() or "synscan-follow-sat.service"
 CSRF_COOKIE = "synscan_csrf"
 CSRF_FIELD = "csrf_token"
 # If SYNSCAN_WEB_USER is empty, only password is checked (backward compatible).
@@ -40,8 +40,8 @@ def _normalize_web_host(value: str) -> str:
 
 
 WEB_HOST = _normalize_web_host(
-    os.getenv("SYNSCAN_WEB_HOST", "158.196.240.175")
-) or "158.196.240.175"
+    os.getenv("SYNSCAN_WEB_HOST", "127.0.0.1")
+) or "127.0.0.1"
 try:
     WEB_PORT = int(os.getenv("SYNSCAN_WEB_PORT", "8080"))
 except ValueError as exc:
@@ -79,7 +79,6 @@ TEMPLATE = r"""
       <div><b>Režim</b></div><div id="ph">?</div>
       <div><b>Cíl</b></div><div id="tgt">?</div>
       <div><b>Az / El </b></div><div><span id="az">?</span>° / <span id="el">?</span>°</div>
-      <div><b>Stavová zpráva</b></div><div id="msg" class="mono">?</div>
       <div><b>Poslední update</b></div><div id="ts">?</div>
       <div><b>Poslední příkaz</b></div><div><span id="cmd" class="mono">?</span> <span id="cmdts" class="small"></span></div>
     </div>
@@ -317,7 +316,7 @@ TEMPLATE = r"""
         if(!s){
           setText('ph','-'); setText('tgt','(zatím žádný synscan_status.json)');
           setText('az','-'); setText('el','-');
-          setText('msg','-'); setText('ts','-');
+          setText('ts','-');
           setText('cmd','-'); setText('cmdts','');
           setText('summary', statusSummary(svc, null));
           return;
@@ -335,7 +334,6 @@ TEMPLATE = r"""
         setNum('cur_el', s.el_user_deg, 1);
         setNum('cur_elm', s.el_mount_deg, 1);
 
-        setText('msg', s.message);
         setText('ts',  s.ts);
 
         setText('cmd', s.last_cmd);
@@ -481,14 +479,20 @@ def service_state() -> dict:
     e = sh(["systemctl", "is-enabled", SERVICE]).stdout.strip()
     return {"active": a, "enabled": e}
 
+def privileged_systemctl(*args: str) -> list[str]:
+    cmd = ["systemctl", *args]
+    if os.geteuid() == 0:
+        return cmd
+    return ["sudo", "-n", *cmd]
+
 def service_start():
-    sh_checked(["sudo", "systemctl", "start", SERVICE])
+    sh_checked(privileged_systemctl("start", SERVICE))
 
 def service_stop():
-    sh_checked(["sudo", "systemctl", "stop", SERVICE])
+    sh_checked(privileged_systemctl("stop", SERVICE))
 
 def service_restart():
-    sh_checked(["sudo", "systemctl", "restart", SERVICE])
+    sh_checked(privileged_systemctl("restart", SERVICE))
 
 def atomic_write_json(path: Path, data: dict):
     tmp = path.with_suffix(".tmp")
@@ -608,7 +612,6 @@ def config_post():
             "lon": parse_float_field("lon", 0.0),
             "alt": parse_float_field("alt", 0.0),
             "tle": tle_fixed,
-            "mode": "state",
             "state": state_fixed,
             "min_el": parse_float_field("min_el", 10.0),
             "interval": interval_fixed,

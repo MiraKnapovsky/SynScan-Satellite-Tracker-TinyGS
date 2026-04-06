@@ -1,4 +1,6 @@
 [Unit]
+# Legacy single-user example for the original student machine.
+# Prefer mqtt_tinygs_listen@.service for new Debian deployments.
 Description=TinyGS MQTT listener (latest state JSON)
 After=network-online.target
 Wants=network-online.target

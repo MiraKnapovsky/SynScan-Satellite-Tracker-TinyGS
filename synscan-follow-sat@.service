@@ -1,0 +1,16 @@
+[Unit]
+Description=SynScan satellite tracker for user %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=%i
+WorkingDirectory=/home/%i/synscan_tinygs_tracker
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/%i/synscan_tinygs_tracker/tinygs_mqtt/env/bin/python /home/%i/synscan_tinygs_tracker/synscan_runner.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -8,7 +8,7 @@ import ssl
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from mqtt_filters import extract_frame_metrics, extract_frame_satellite, sat_dedupe_key
 from mqtt_geo import SatelliteLocator
@@ -298,9 +298,109 @@ from(bucket: "{args.influx_bucket}")
 
     write_confirmed_catalog_meta()
 
-    frame_last_seen_ts_by_sat: Dict[str, float] = {}
+    frame_last_seen_by_sat: Dict[str, Tuple[float, str]] = {}
+    last_state_norad: Optional[int] = None
 
-    client = make_client(client_id=f"tinygs-json-{int(time.time())}")
+    def parse_norad_value(raw_value: Any) -> Optional[int]:
+        try:
+            norad_value = int(float(raw_value))
+        except (TypeError, ValueError):
+            return None
+        if norad_value <= 0:
+            return None
+        return norad_value
+
+    def extract_message_norad(obj: Any) -> Optional[int]:
+        if not isinstance(obj, dict):
+            return None
+        for key in ("tracked_norad", "NORAD", "norad"):
+            norad_value = parse_norad_value(obj.get(key))
+            if norad_value is not None:
+                return norad_value
+        return None
+
+    def resolve_geo_norad(
+        now_dt: datetime,
+        obj: Any = None,
+        sat_name: Optional[str] = None,
+    ) -> Optional[int]:
+        tracker_norad = read_tracked_norad(now_dt=now_dt)
+        if tracker_norad is not None:
+            return tracker_norad
+
+        message_norad = extract_message_norad(obj)
+        if message_norad is not None:
+            return message_norad
+
+        if last_state_norad is not None:
+            return last_state_norad
+
+        if sat_locator and sat_name:
+            return sat_locator.find_norad_by_name(sat_name)
+
+        return None
+
+    def compact_sat_name(name: Optional[str]) -> str:
+        return "".join(ch for ch in str(name or "").lower() if ch.isalnum())
+
+    def sat_names_match(reported_name: Optional[str], tle_name: Optional[str]) -> bool:
+        reported_key = sat_dedupe_key(str(reported_name or ""))
+        tle_key = sat_dedupe_key(str(tle_name or ""))
+        if reported_key and tle_key and reported_key == tle_key:
+            return True
+
+        reported_compact = compact_sat_name(reported_name)
+        tle_compact = compact_sat_name(tle_name)
+        if not reported_compact or not tle_compact:
+            return False
+        return (
+            reported_compact == tle_compact
+            or reported_compact.startswith(tle_compact)
+            or tle_compact.startswith(reported_compact)
+        )
+
+    def locate_with_name_fallback(
+        now_dt: datetime,
+        tracked_norad: Optional[int],
+        sat_name: Optional[str],
+    ) -> Tuple[Optional[int], Dict[str, Any]]:
+        geo_info: Dict[str, Any] = {"tle_found": False}
+        if not sat_locator:
+            return tracked_norad, geo_info
+
+        name_norad = sat_locator.find_norad_by_name(sat_name) if sat_name else None
+
+        if tracked_norad is not None:
+            try:
+                candidate_geo = sat_locator.locate(tracked_norad, now_dt)
+            except Exception as e:
+                print(f"[WARN] GEO locate failed for tracked_norad={tracked_norad}: {e}")
+            else:
+                if candidate_geo.get("tle_found"):
+                    located_name = str(candidate_geo.get("tle_satellite") or "").strip()
+                    if not sat_name or sat_names_match(sat_name, located_name):
+                        return tracked_norad, candidate_geo
+                    print(
+                        "[GEO] NORAD/name mismatch, trying sat-name fallback "
+                        f"(tracked_norad={tracked_norad}, satellite={sat_name}, tle_satellite={located_name})"
+                    )
+
+        if name_norad is not None:
+            try:
+                candidate_geo = sat_locator.locate(name_norad, now_dt)
+            except Exception as e:
+                print(f"[WARN] GEO locate failed for sat-name fallback norad={name_norad}: {e}")
+            else:
+                if candidate_geo.get("tle_found"):
+                    if sat_name and not sat_names_match(sat_name, candidate_geo.get("tle_satellite")):
+                        candidate_geo = dict(candidate_geo)
+                        candidate_geo["tle_satellite"] = sat_name
+                    return name_norad, candidate_geo
+
+        return tracked_norad, geo_info
+
+    client_station = "".join(ch for ch in str(args.station) if ch.isalnum())[:18] or "station"
+    client = make_client(client_id=f"tgs-{client_station}")
     client.username_pw_set(args.user, args.password)
     if args.cafile:
         tls_ctx = ssl.create_default_context()
@@ -326,6 +426,7 @@ from(bucket: "{args.influx_bucket}")
         now_dt: datetime,
         topic_info: Dict[str, Optional[str]],
     ) -> None:
+        nonlocal last_state_norad
         state_obj = dict(obj)
         state_obj["last_update"] = datetime.now().strftime("%H:%M:%S")
         try:
@@ -335,21 +436,14 @@ from(bucket: "{args.influx_bucket}")
 
         state_sat_name = str(obj.get("sat") or "").strip()
         state_geo_info: Dict[str, Any] = {"tle_found": False}
-        tracked_norad = read_tracked_norad(now_dt=now_dt)
-        if sat_locator:
-            if tracked_norad is None:
-                print("[FILTER] Dropped state: missing tracked_norad for NORAD-only TLE lookup")
-                return
-            try:
-                state_geo_info = sat_locator.locate(tracked_norad, now_dt)
-            except Exception as e:
-                print(f"[WARN] GEO locate failed for state tracked_norad={tracked_norad}: {e}")
-            if not state_geo_info.get("tle_found"):
-                print(
-                    "[FILTER] Dropped state: tracked_norad not found in TLE "
-                    f"(tracked_norad={tracked_norad})"
-                )
-                return
+        tracked_norad = resolve_geo_norad(now_dt=now_dt, obj=obj, sat_name=state_sat_name)
+        tracked_norad, state_geo_info = locate_with_name_fallback(
+            now_dt=now_dt,
+            tracked_norad=tracked_norad,
+            sat_name=state_sat_name,
+        )
+        if tracked_norad is not None and state_geo_info.get("tle_found"):
+            last_state_norad = tracked_norad
 
         if not influx_point_cls:
             return
@@ -408,9 +502,9 @@ from(bucket: "{args.influx_bucket}")
     ) -> bool:
         frame_filtered = False
         geo_info: Dict[str, Any] = {"tle_found": False}
-        tracked_norad = read_tracked_norad(now_dt=now_dt)
         sat_name = extract_frame_satellite(obj if json_ok else None)
         frame_metrics = extract_frame_metrics(obj if json_ok else None)
+        tracked_norad = resolve_geo_norad(now_dt=now_dt, obj=obj, sat_name=sat_name)
         if frame_metrics["crc_error"] and not sat_name:
             frame_filtered = True
             print("[FILTER] Dropped frame: crc_error without satellite")
@@ -422,31 +516,29 @@ from(bucket: "{args.influx_bucket}")
         ):
             key = sat_dedupe_key(sat_name)
             now_ts = time.time()
-            prev_ts = frame_last_seen_ts_by_sat.get(key)
-            if prev_ts is not None and (now_ts - prev_ts) <= args.frame_dedupe_window_s:
-                frame_filtered = True
-                print(
-                    "[FILTER] Dropped frame: duplicate satellite frame "
-                    f"(satellite={sat_name}, window={args.frame_dedupe_window_s:.1f}s)"
-                )
-            else:
-                frame_last_seen_ts_by_sat[key] = now_ts
-
-        if not frame_filtered and sat_locator:
-            if tracked_norad is None:
-                frame_filtered = True
-                print("[FILTER] Dropped frame: missing tracked_norad for NORAD-only TLE lookup")
-            else:
-                try:
-                    geo_info = sat_locator.locate(tracked_norad, now_dt)
-                except Exception as e:
-                    print(f"[WARN] GEO locate failed for tracked_norad={tracked_norad}: {e}")
-                if not geo_info.get("tle_found"):
+            current_status = str(frame_metrics.get("decode_status") or "unknown")
+            prev_info = frame_last_seen_by_sat.get(key)
+            if prev_info is not None:
+                prev_ts, prev_status = prev_info
+                within_window = (now_ts - prev_ts) <= args.frame_dedupe_window_s
+                prefer_confirmed = current_status == "confirmed" and prev_status != "confirmed"
+                if within_window and not prefer_confirmed:
                     frame_filtered = True
                     print(
-                        "[FILTER] Dropped frame: tracked_norad not found in TLE "
-                        f"(tracked_norad={tracked_norad})"
+                        "[FILTER] Dropped frame: duplicate satellite frame "
+                        f"(satellite={sat_name}, window={args.frame_dedupe_window_s:.1f}s)"
                     )
+                else:
+                    frame_last_seen_by_sat[key] = (now_ts, current_status)
+            else:
+                frame_last_seen_by_sat[key] = (now_ts, current_status)
+
+        if not frame_filtered and sat_locator:
+            tracked_norad, geo_info = locate_with_name_fallback(
+                now_dt=now_dt,
+                tracked_norad=tracked_norad,
+                sat_name=sat_name,
+            )
 
             if (
                 not frame_filtered
@@ -583,8 +675,10 @@ from(bucket: "{args.influx_bucket}")
             except OSError as e:
                 print(f"[WARN] Nepodarilo se zapsat raw data: {e}")
 
-    def on_disconnect(client, userdata, reason_code, properties=None):
-        rc = getattr(reason_code, "value", reason_code)
+    def on_disconnect(client, userdata, disconnect_flags=None, reason_code=None, properties=None):
+        # Support both legacy and current paho-mqtt callback signatures.
+        reason = reason_code if reason_code is not None else disconnect_flags
+        rc = getattr(reason, "value", reason)
         print(f"[MQTT] Disconnected, reason_code={rc}")
 
     client.on_connect = on_connect

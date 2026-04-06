@@ -7,6 +7,7 @@ This project tracks satellites with a SynScan mount, using TinyGS MQTT state upd
 - Tested on Raspberry Pi 5 (4 GB RAM).
 - Tested on Debian GNU/Linux with `systemd`.
 - This project is currently Debian-focused. Service files and setup steps in this README are prepared for Debian.
+- The provided template units assume the repository is cloned to `$HOME/synscan_tinygs_tracker`.
 
 ## Components
 
@@ -19,7 +20,6 @@ This project tracks satellites with a SynScan mount, using TinyGS MQTT state upd
 - `mqtt_storage.py`: file/catalog/state serialization helpers used by the listener.
 - `mqtt_geo.py`: TLE-based satellite lookup and geometry calculations.
 - `import_requests.py`: downloads supported TinyGS satellites and writes `satellites.tle`.
-- `synscan_manual.py`: interactive manual mount control.
 - `synscan_common.py`: shared serial protocol + az/el conversion utilities.
 
 ## Runtime Files
@@ -33,8 +33,8 @@ This project tracks satellites with a SynScan mount, using TinyGS MQTT state upd
 ## Clone Repository
 
 ```bash
-git clone https://github.com/MiraKnapovsky/SynScan-Satellite-Tracker-TinyGS.git /home/<user>/synscan_tinygs_tracker
-cd /home/<user>/synscan_tinygs_tracker
+git clone https://github.com/MiraKnapovsky/SynScan-Satellite-Tracker-TinyGS.git "$HOME/synscan_tinygs_tracker"
+cd "$HOME/synscan_tinygs_tracker"
 ```
 
 ## Requirements
@@ -56,8 +56,8 @@ Use this as the single end-to-end path on a new Debian machine.
 1. Clone and enter the project (skip this if you already used the `Clone Repository` section above):
 
 ```bash
-git clone https://github.com/MiraKnapovsky/SynScan-Satellite-Tracker-TinyGS.git /home/<user>/synscan_tinygs_tracker
-cd /home/<user>/synscan_tinygs_tracker
+git clone https://github.com/MiraKnapovsky/SynScan-Satellite-Tracker-TinyGS.git "$HOME/synscan_tinygs_tracker"
+cd "$HOME/synscan_tinygs_tracker"
 ```
 
 2. Create virtual environment and install dependencies:
@@ -91,7 +91,7 @@ python3 import_requests.py
 - Real movement later: set `dummy: false` and confirm `port`, `lat`, `lon`, `alt`.
 - Target selection reads `NORAD` from `state.json`.
 - When `NORAD` is missing in `state.json`, tracker switches to surveillance/neutral position.
-- Keep `state` and `status_file` paths pointing to this project directory.
+- Relative paths such as `satellites.tle`, `state.json`, and `synscan_status.json` are resolved relative to the project directory.
 
 6. Load listener credentials into current shell:
 
@@ -108,52 +108,79 @@ python3 mqtt_tinygs_listen.py \
   --user "$TINYGS_USER" \
   --station "$TINYGS_STATION" \
   --password "$TINYGS_PASS" \
-  --out /home/<user>/synscan_tinygs_tracker/state.json \
+  --out "$HOME/synscan_tinygs_tracker/state.json" \
   --frame-topic tinygs/${TINYGS_USER}/${TINYGS_STATION}/cmnd/frame/0
 ```
 
 8. Verify that `state.json` is updating (open second terminal):
 
 ```bash
-cat /home/<user>/synscan_tinygs_tracker/state.json
+cat "$HOME/synscan_tinygs_tracker/state.json"
 ```
 
 9. Start tracker loop (second terminal):
 
 ```bash
-cd /home/<user>/synscan_tinygs_tracker
+cd "$HOME/synscan_tinygs_tracker"
 python3 synscan_runner.py
 ```
 
 10. Start web UI (third terminal):
 
 ```bash
-cd /home/<user>/synscan_tinygs_tracker
+cd "$HOME/synscan_tinygs_tracker"
 export SYNSCAN_WEB_PASSWORD=change-me
 # optional:
 # export SYNSCAN_WEB_USER=admin
-# export SYNSCAN_WEB_HOST=158.196.240.175
+# export SYNSCAN_WEB_HOST=0.0.0.0
 # export SYNSCAN_WEB_PORT=8080
 python3 synscan_web.py
 ```
 
-Open `http://158.196.240.175:8080/config` (or your custom host/port).
+Open `http://127.0.0.1:8080/config` locally.
+If you set `SYNSCAN_WEB_HOST=0.0.0.0`, open `http://<debian-host-ip>:8080/config` from another machine.
 
-11. Optional: run listener as systemd service after manual test passes:
+11. Optional: install the template systemd units after the manual test passes:
 
 ```bash
-sudo cp /home/<user>/synscan_tinygs_tracker/mqtt_tinygs_listen@.service /etc/systemd/system/
+sudo cp "$HOME/synscan_tinygs_tracker/mqtt_tinygs_listen@.service" /etc/systemd/system/
+sudo cp "$HOME/synscan_tinygs_tracker/synscan-follow-sat@.service" /etc/systemd/system/
+sudo cp "$HOME/synscan_tinygs_tracker/synscan-web@.service" /etc/systemd/system/
 sudo systemctl daemon-reload
+cp "$HOME/synscan_tinygs_tracker/synscan_web.env.example" "$HOME/synscan_tinygs_tracker/synscan_web.env"
+editor "$HOME/synscan_tinygs_tracker/synscan_web.env"
 sudo systemctl enable --now mqtt_tinygs_listen@$(whoami).service
-sudo systemctl status mqtt_tinygs_listen@$(whoami).service
+sudo systemctl enable --now synscan-follow-sat@$(whoami).service
+sudo systemctl enable --now synscan-web@$(whoami).service
+sudo systemctl status mqtt_tinygs_listen@$(whoami).service \
+  synscan-follow-sat@$(whoami).service \
+  synscan-web@$(whoami).service
 ```
 
-12. Optional: if you already installed `synscan-follow-sat.service` and `synscan-web.service`, control them with:
+12. Optional: restart the template units manually:
 
 ```bash
-sudo systemctl restart synscan-follow-sat.service
-sudo systemctl restart synscan-web.service
-sudo systemctl status synscan-follow-sat.service synscan-web.service
+sudo systemctl restart mqtt_tinygs_listen@$(whoami).service
+sudo systemctl restart synscan-follow-sat@$(whoami).service
+sudo systemctl restart synscan-web@$(whoami).service
+sudo systemctl status mqtt_tinygs_listen@$(whoami).service \
+  synscan-follow-sat@$(whoami).service \
+  synscan-web@$(whoami).service
+```
+
+The web UI can start/stop/restart the tracker service automatically when:
+
+- `synscan_web.py` knows the correct tracker unit via `SYNSCAN_FOLLOW_SERVICE`
+- the web process has permission to manage system services
+
+The provided `synscan-web@.service` sets `SYNSCAN_FOLLOW_SERVICE=synscan-follow-sat@<user>.service`.
+For service control actions on Debian, the web process still needs permission to run `systemctl` as root.
+
+13. Optional: if you want only the listener as a service:
+
+```bash
+sudo systemctl enable --now mqtt_tinygs_listen@$(whoami).service
+sudo systemctl status mqtt_tinygs_listen@$(whoami).service
 ```
 
 ## InfluxDB + Grafana
@@ -163,10 +190,10 @@ sudo systemctl status synscan-follow-sat.service synscan-web.service
 - Measurement `tinygs_state`: data from topic `cmnd/begine` (mode, freq, bw, sf, cr, NORAD, ...).
 - Measurement `tinygs_frame`: data from topic `cmnd/frame/0` (satellite, RSSI, SNR, freq error, confirmed/crc_error).
 
-Configuration is via env vars (already loaded by `mqtt_tinygs_listen.service`):
+Configuration is via env vars (already loaded by `mqtt_tinygs_listen@.service`):
 
 ```bash
-# /home/student/synscan_tinygs_tracker/mqtt_tinygs_listen.env
+# $HOME/synscan_tinygs_tracker/mqtt_tinygs_listen.env
 INFLUXDB_URL=http://127.0.0.1:8086
 INFLUXDB_ORG=your-org
 INFLUXDB_BUCKET=tinygs
@@ -185,21 +212,109 @@ Then restart listener:
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl restart mqtt_tinygs_listen.service
-sudo systemctl status mqtt_tinygs_listen.service
+sudo systemctl restart mqtt_tinygs_listen@$(whoami).service
+sudo systemctl status mqtt_tinygs_listen@$(whoami).service
 ```
 
 Portable multi-user variant (recommended for new deployments):
 
 ```bash
 # install template unit
-sudo cp /home/<user>/synscan_tinygs_tracker/mqtt_tinygs_listen@.service /etc/systemd/system/
+sudo cp "$HOME/synscan_tinygs_tracker/mqtt_tinygs_listen@.service" /etc/systemd/system/
 sudo systemctl daemon-reload
 
 # start for target linux user account (example: alice)
 sudo systemctl enable --now mqtt_tinygs_listen@alice.service
 sudo systemctl status mqtt_tinygs_listen@alice.service
 ```
+
+## Second MQTT Station (Grafana Only)
+
+This project now has a simple two-station layout:
+
+- Main station: recommended `mqtt_tinygs_listen@.service`, writes `state.json` for the rotator.
+- Second passive station: new `mqtt_tinygs_listen_passive@.service`, writes to a separate bucket and never affects the rotator.
+
+Prepare env file for the second station:
+
+```bash
+cp "$HOME/synscan_tinygs_tracker/mqtt_tinygs_listen_passive.env.example" \
+  "$HOME/synscan_tinygs_tracker/mqtt_tinygs_listen_passive.env"
+```
+
+MQTT login stays the same as for the rotator station:
+
+- keep the same `TINYGS_USER`
+- keep the same `TINYGS_PASS`
+- change only `TINYGS_STATION` to `KNA0047QFH`
+- use a different `INFLUXDB_BUCKET`
+
+Recommended values for `KNA0047QFH`:
+
+```bash
+TINYGS_USER=1472927374
+TINYGS_STATION=KNA0047QFH
+TINYGS_PASS=YOUR_PASSWORD
+INFLUXDB_URL=http://127.0.0.1:8086
+INFLUXDB_ORG=your-org
+INFLUXDB_BUCKET=tinygs_kna0047qfh
+INFLUXDB_TOKEN=your-token
+INFLUXDB_MEAS_FRAME=tinygs_frame
+INFLUXDB_MEAS_STATE=tinygs_state
+INFLUXDB_MEAS_META=tinygs_meta
+TINYGS_TRACKER_STATUS_FILE=
+```
+
+Fastest setup is usually:
+
+```bash
+cp "$HOME/synscan_tinygs_tracker/mqtt_tinygs_listen.env" \
+  "$HOME/synscan_tinygs_tracker/mqtt_tinygs_listen_passive.env"
+```
+
+Then edit only:
+
+- `TINYGS_STATION=KNA0047QFH`
+- `INFLUXDB_BUCKET=tinygs_kna0047qfh`
+- `TINYGS_TRACKER_STATUS_FILE=`
+
+Manual test run for the second station:
+
+```bash
+set -a
+source "$HOME/synscan_tinygs_tracker/mqtt_tinygs_listen_passive.env"
+set +a
+python3 "$HOME/synscan_tinygs_tracker/mqtt_tinygs_listen.py" \
+  --user "$TINYGS_USER" \
+  --station "$TINYGS_STATION" \
+  --password "$TINYGS_PASS" \
+  --out "$HOME/synscan_tinygs_tracker/state_passive.json" \
+  --confirmed-catalog-out "$HOME/synscan_tinygs_tracker/confirmed_satellites_passive.json" \
+  --frame-topic tinygs/${TINYGS_USER}/${TINYGS_STATION}/cmnd/frame/0
+```
+
+Install and start passive systemd service:
+
+```bash
+sudo cp "$HOME/synscan_tinygs_tracker/mqtt_tinygs_listen_passive@.service" /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now mqtt_tinygs_listen_passive@$(whoami).service
+sudo systemctl status mqtt_tinygs_listen_passive@$(whoami).service
+```
+
+Useful log command:
+
+```bash
+journalctl -u mqtt_tinygs_listen_passive@$(whoami).service -f
+```
+
+This passive service always:
+
+- writes to `state_passive.json` instead of `state.json`
+- writes its own confirmed catalog to `confirmed_satellites_passive.json`
+- keeps tracker status stamping disabled when `TINYGS_TRACKER_STATUS_FILE=` is empty
+- keeps geo enrichment enabled when gateway location and TLE data are available
+- uses whatever `INFLUXDB_BUCKET` you set in `mqtt_tinygs_listen_passive.env`
 
 Grafana setup:
 
@@ -218,9 +333,8 @@ Detailed dashboard documentation:
 - `dummy`: `true` to log commands only (no serial writes).
 - `port`: serial port path (for real mode), e.g. `/dev/ttyUSB0`.
 - `lat`, `lon`, `alt`: observer location.
-- `tle`: path to TLE file.
-- `mode`: tracking mode key in config.
-- `state`: path to TinyGS state file (`state.json`) used for NORAD target selection.
+- `tle`: path to TLE file. Relative paths are resolved against the project directory.
+- `state`: path to TinyGS state file (`state.json`) used for NORAD target selection. Relative paths are resolved against the project directory.
 - `min_el`: minimum elevation threshold.
 - `interval`: control loop period in seconds.
 - `lead`: prediction lead time in seconds.
@@ -237,8 +351,9 @@ Web UI note:
 
 - `SYNSCAN_WEB_PASSWORD`: required password (no insecure default).
 - `SYNSCAN_WEB_USER`: optional username. If empty, only password is checked.
-- `SYNSCAN_WEB_HOST`: optional bind host (default: `158.196.240.175`).
+- `SYNSCAN_WEB_HOST`: optional bind host (default: `127.0.0.1`).
 - `SYNSCAN_WEB_PORT`: optional bind port (default: `8080`).
+- `SYNSCAN_FOLLOW_SERVICE`: optional tracker unit name for the web service-control buttons.
 
 POST protection:
 - All web `POST` actions use CSRF protection.
@@ -247,8 +362,12 @@ POST protection:
 
 ## Services
 
-`synscan_web.py` controls service name `synscan-follow-sat.service` via `systemctl`.
-If you use service mode, ensure this unit exists and runs `python3 synscan_runner.py`.
+`synscan_web.py` controls the tracker service via `systemctl`.
+For new Debian deployments, use:
 
-`mqtt_tinygs_listen.service` is already present in this directory for the TinyGS listener.
-For user-specific deployments without hardcoded `student` paths, use `mqtt_tinygs_listen@.service`.
+- `mqtt_tinygs_listen@.service`
+- `synscan-follow-sat@.service`
+- `synscan-web@.service`
+
+The legacy `mqtt_tinygs_listen.service` is kept only as a fixed local example for the original machine.
+For the second passive Grafana-only station, use `mqtt_tinygs_listen_passive@.service`.
