@@ -53,7 +53,7 @@ Optional but supported:
 - `mqtt_filters.py`: frame parsing/filtering and satellite-name normalization.
 - `mqtt_storage.py`: file/catalog/state serialization helpers used by the listener.
 - `mqtt_geo.py`: TLE-based satellite lookup and geometry calculations.
-- `import_requests.py`: downloads supported TinyGS satellites and writes `satellites.tle`.
+- `import_requests.py`: downloads supported TinyGS satellites and writes local `satellites.tle`.
 - `synscan_common.py`: shared serial protocol + az/el conversion utilities.
 
 ## Runtime Files
@@ -61,7 +61,7 @@ Optional but supported:
 - `synscan_config.json`: tracker configuration used by `synscan_runner.py`.
 - `state.json`: latest TinyGS state (updated by MQTT listener).
 - `synscan_status.json`: live tracker status (updated by `synscan_follow_sat.py`).
-- `satellites.tle`: TLE dataset used for tracking.
+- `satellites.tle`: local generated TLE dataset used for tracking.
 - `all_rx.jsonl`: optional frame packet archive (only when listener is started with `--rx-out`).
 
 ## Clone Repository
@@ -114,7 +114,7 @@ Edit `mqtt_tinygs_listen.env` and fill in:
 - `TINYGS_STATION`
 - `TINYGS_PASS`
 
-4. Download current TLE data:
+4. Download current TLE data locally (required before tracking):
 
 ```bash
 python3 import_requests.py
@@ -403,5 +403,4 @@ For new Debian deployments, use:
 - `synscan-follow-sat@.service`
 - `synscan-web@.service`
 
-The legacy `mqtt_tinygs_listen.service` is kept only as a fixed local example for the original machine.
 For the second passive Grafana-only station, use `mqtt_tinygs_listen_passive@.service`.
