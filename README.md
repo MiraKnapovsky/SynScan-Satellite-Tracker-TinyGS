@@ -2,6 +2,40 @@
 
 This project tracks satellites with a SynScan mount, using TinyGS MQTT state updates and local TLE data.
 
+## What This Is
+
+- A Debian/Raspberry Pi control layer that connects TinyGS MQTT data with a SynScan antenna rotator.
+- It reads the currently relevant satellite from TinyGS state updates, resolves it by NORAD, and computes azimuth/elevation from local TLE data.
+- It moves a directional antenna automatically, while also exposing a web UI for status, config changes, logs, and manual override.
+- It can store receive telemetry in InfluxDB/Grafana and can also run a second passive TinyGS station in parallel.
+- The main use case is a LoRa satellite receive station with one tracked directional antenna and an optional omnidirectional monitor antenna.
+
+## Wiring Diagram
+
+![System setup and wiring diagram](docs/system-setup.svg)
+
+This diagram reflects the intended project layout: one directional station on a SynScan rotator, one optional passive station, and a Debian host that glues TinyGS, control, and observability together.
+
+## Who Is This For
+
+- People already running, or planning to run, a TinyGS-compatible LoRa receive station on Debian or Raspberry Pi.
+- Users with a SynScan mount or rotator who want automatic satellite tracking instead of only manual pointing.
+- Builders who want one machine to handle MQTT ingest, rotator control, a local web UI, and optional InfluxDB/Grafana telemetry.
+- Operators who may use two RF paths: a directional tracked antenna and a second passive omnidirectional antenna.
+
+## Minimum Hardware Setup
+
+- A Debian machine, typically a Raspberry Pi 5, with Python 3.10+ and `systemd`.
+- One SynScan-compatible mount/rotator connected over serial or USB-to-serial.
+- One directional antenna connected to a TinyGS-compatible ESP32 LoRa receiver.
+- Network access from the Debian host to the TinyGS MQTT/API backend.
+- Local TLE data and TinyGS credentials configured in this repository.
+
+Optional but supported:
+
+- A second ESP32 LoRa receiver with an omnidirectional antenna for passive monitoring.
+- InfluxDB and Grafana for telemetry, pass analysis, and dashboards.
+
 ## Platform Notes
 
 - Tested on Raspberry Pi 5 (4 GB RAM).
