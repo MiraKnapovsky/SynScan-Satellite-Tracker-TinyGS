@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Dict
 import hmac
 from flask import Flask, request, redirect, url_for, jsonify, render_template_string, Response, g
-from synscan_common import goto_azel, open_port, send_cmd, transform_el
+from synscan_common import clamp_el, goto_azel, open_port, send_cmd
 
 app = Flask(__name__)
 
@@ -174,10 +174,10 @@ TEMPLATE = r"""
     <div class="small">Doporučeno: nejdřív zastavit službu, aby si nepřepisovala příkazy.</div>
     <div class="kv" style="margin-top:10px;">
       <div><b>Aktuální Az / El</b></div>
-      <div><span id="cur_az">?</span>° / <span id="cur_el">?</span>° (montáž: <span id="cur_elm">?</span>°)</div>
-      <div><b>Az (uživatel)</b></div>
+      <div><span id="cur_az">?</span>° / <span id="cur_el">?</span>°</div>
+      <div><b>Az</b></div>
       <div><input id="man_az" type="number" step="0.1" placeholder="0–360" disabled></div>
-      <div><b>El (uživatel)</b></div>
+      <div><b>El</b></div>
       <div><input id="man_el" type="number" step="0.1" placeholder="0–90" disabled></div>
       <div><b>Výsledek</b></div>
       <div id="man_out" class="mono">-</div>
@@ -279,7 +279,7 @@ TEMPLATE = r"""
           setText('man_out', j.error || 'Chyba.');
           return;
         }
-        const out = 'Zadané: Az ' + j.az_user + '°, El ' + j.el_user + '° | Posláno: Az ' + j.az_send + '°, El ' + j.el_send + '°';
+        const out = 'Odesláno: Az ' + j.az_deg + '°, El ' + j.el_deg + '°';
         setText('man_out', out);
       }catch(e){
         setText('man_out', 'Chyba při odeslání.');
@@ -329,11 +329,9 @@ TEMPLATE = r"""
         setText('tgt', tgt);
 
         setNum('az',  s.az_deg, 1);
-        setNum('el',  s.el_user_deg, 1);
+        setNum('el',  s.el_deg, 1);
         setNum('cur_az', s.az_deg, 1);
-        setNum('cur_el', s.el_user_deg, 1);
-        setNum('cur_elm', s.el_mount_deg, 1);
-
+        setNum('cur_el', s.el_deg, 1);
         setText('ts',  s.ts);
 
         setText('cmd', s.last_cmd);
@@ -545,7 +543,7 @@ def api_manual_goto():
         return jsonify({"ok": False, "error": "El musí být v rozsahu 0..90°."}), 400
 
     try:
-        el_send = transform_el(el_user)
+        el_send = clamp_el(el_user)
         with open_port(_get_port()) as ser:
             cmd, ok = goto_azel(ser, az_user, el_send)
         if not ok:
@@ -555,10 +553,8 @@ def api_manual_goto():
 
     return jsonify({
         "ok": True,
-        "az_user": round(az_user, 2),
-        "el_user": round(el_user, 2),
-        "az_send": round(az_user, 2),
-        "el_send": round(el_send, 2),
+        "az_deg": round(az_user, 2),
+        "el_deg": round(el_send, 2),
         "cmd": cmd,
     })
 

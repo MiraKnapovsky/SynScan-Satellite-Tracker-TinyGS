@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Shared SynScan helpers for serial I/O and angle transforms."""
+"""Shared SynScan helpers for serial I/O and angle handling."""
 
 from __future__ import annotations
 
@@ -7,13 +7,6 @@ import time
 from typing import Optional, Tuple
 
 import serial
-
-# User elevation 0..90 deg maps to mount elevation 84..0 deg.
-USER_START = 0.0
-REAL_START = 84.0
-USER_END = 90.0
-REAL_END = 0.0
-
 
 def open_port(port: str) -> serial.Serial:
     return serial.Serial(
@@ -55,10 +48,8 @@ def deg_to_hex16(angle_deg: float) -> str:
     return f"{value:04X}"
 
 
-def transform_el(user_el: float) -> float:
-    clamped_user = max(0.0, min(90.0, user_el))
-    slope = (REAL_END - REAL_START) / (USER_END - USER_START)
-    return REAL_START + (slope * clamped_user)
+def clamp_el(angle_deg: float) -> float:
+    return max(0.0, min(90.0, angle_deg))
 
 
 def goto_azel(ser: Optional[serial.Serial], az_deg: float, el_deg: float, dummy: bool = False) -> Tuple[str, bool]:

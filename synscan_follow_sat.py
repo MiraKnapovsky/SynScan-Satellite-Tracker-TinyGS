@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import serial
 from skyfield.api import EarthSatellite, load, wgs84
 
-from synscan_common import deg_to_hex16, open_port, send_cmd as serial_send_cmd, transform_el
+from synscan_common import clamp_el, deg_to_hex16, open_port, send_cmd as serial_send_cmd
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -241,7 +241,7 @@ def main():
                     do_center: bool,
                     az: Optional[float],
                     el_u: Optional[float],
-                    el_r: Optional[float],
+                    el_cmd: Optional[float],
                     force: bool = False) -> None:
         nonlocal status_last
         if status_path is None:
@@ -278,8 +278,7 @@ def main():
             "tracked_norad": int(tracked.model.satnum) if tracked else None,
 
             "az_deg": az,
-            "el_user_deg": el_u,
-            "el_mount_deg": el_r,
+            "el_deg": el_cmd,
             "az_unwrapped": az_unwrapped,
             "az_plan_k": plan_k,
             "az_plan_ok": plan_ok,
@@ -348,7 +347,7 @@ def main():
         do_center=False,
         az=last_az,
         el_u=last_el_user,
-        el_r=transform_el(last_el_user) if last_el_user is not None else None,
+        el_cmd=clamp_el(last_el_user) if last_el_user is not None else None,
         force=True
     )
 
@@ -401,7 +400,7 @@ def main():
             if do_center:
                 az = float(args.az_home)
                 el_u = float(args.center_el)
-                el_r = transform_el(el_u)
+                el_r = clamp_el(el_u)
 
                 if not hc_busy(ser, args.dummy):
                     need_move = (
@@ -418,13 +417,13 @@ def main():
                         last_el_user = el_u
 
                     sys.stdout.write(
-                        f"\r[SURVEILLANCE] Neutral Az: {az:6.1f}° | El: {el_u:5.1f}° -> Montáž: {el_r:5.2f}°     "
+                        f"\r[SURVEILLANCE] Neutral Az: {az:6.1f}° | El: {el_u:5.1f}°     "
                     )
                     sys.stdout.flush()
 
                 emit_status(
                     phase="center",
-                    message=f"[SURVEILLANCE] Neutral Az {az:.1f}° | El {el_u:.1f}° -> Montáž {el_r:.2f}°",
+                    message=f"[SURVEILLANCE] Neutral Az {az:.1f}° | El {el_u:.1f}°",
                     tracked=tracked,
                     desired_norad=desired_norad,
                     desired_sat_str=desired_sat_str,
@@ -432,7 +431,7 @@ def main():
                     do_center=True,
                     az=az,
                     el_u=el_u,
-                    el_r=el_r,
+                    el_cmd=el_r,
                 )
 
                 time.sleep(args.interval)
@@ -442,7 +441,7 @@ def main():
             if target_sat:
                 tracked = target_sat
                 el_u, az = altaz_deg(tracked, observer, t_target)
-                el_r = transform_el(el_u)
+                el_r = clamp_el(el_u)
 
                 # --- wrap planning / unwind (pouze když satelit není nad min-el) ---
                 if el_u < args.min_el:
@@ -484,7 +483,7 @@ def main():
                         if not hc_busy(ser, args.dummy):
                             if last_az is None or abs(shortest_delta(args.az_home, last_az)) > 1.0:
                                 unwind_el_user = last_el_user if last_el_user is not None else float(args.center_el)
-                                unwind_el_mount = transform_el(unwind_el_user)
+                                unwind_el_mount = clamp_el(unwind_el_user)
                                 cmd = f"B{deg_to_hex16(args.az_home)},{deg_to_hex16(unwind_el_mount)}"
                                 last_cmd = cmd
                                 last_cmd_ts = iso_now()
@@ -510,7 +509,7 @@ def main():
                         do_center=False,
                         az=az,
                         el_u=el_u,
-                        el_r=el_r,
+                        el_cmd=el_r,
                     )
 
                     time.sleep(1)
@@ -532,7 +531,7 @@ def main():
                         do_center=False,
                         az=az,
                         el_u=el_u,
-                        el_r=el_r,
+                        el_cmd=el_r,
                     )
 
                     time.sleep(1)
@@ -551,7 +550,7 @@ def main():
                         last_az, az_unwrapped = update_unwrapped(last_az, az_unwrapped, az)
                         last_el_user = el_u
 
-                    msg = f"Sleduji: {tracked.name[:18]:18s} | El: {el_u:5.1f}° -> Montáž: {el_r:5.2f}°"
+                    msg = f"Sleduji: {tracked.name[:18]:18s} | El: {el_u:5.1f}°"
                     sys.stdout.write(f"\r{msg:80s}")
                     sys.stdout.flush()
 
@@ -565,7 +564,7 @@ def main():
                         do_center=False,
                         az=az,
                         el_u=el_u,
-                        el_r=el_r,
+                        el_cmd=el_r,
                     )
                 else:
                     # když je HC busy, aspoň piš status (bez pohybu)
@@ -580,7 +579,7 @@ def main():
                         do_center=False,
                         az=az,
                         el_u=el_u,
-                        el_r=el_r,
+                        el_cmd=el_r,
                     )
 
             else:
@@ -599,7 +598,7 @@ def main():
                     do_center=False,
                     az=last_az,
                     el_u=last_el_user,
-                    el_r=transform_el(last_el_user) if last_el_user is not None else None,
+                    el_cmd=clamp_el(last_el_user) if last_el_user is not None else None,
                 )
 
                 time.sleep(1)
@@ -618,7 +617,7 @@ def main():
             do_center=False,
             az=last_az,
             el_u=last_el_user,
-            el_r=transform_el(last_el_user) if last_el_user is not None else None,
+            el_cmd=clamp_el(last_el_user) if last_el_user is not None else None,
             force=True
         )
     finally:
