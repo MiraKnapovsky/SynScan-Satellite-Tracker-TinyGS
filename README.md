@@ -56,8 +56,8 @@ Log out and back in after changing groups. Python package installation is covere
 - `dashboards/`: the three Grafana dashboard JSON files.
 - `examples/`: env file templates copied to local runtime env files.
 - `systemd/`: service templates copied into `/etc/systemd/system/`.
-- `tools/`: one-off helper scripts such as TLE download and local data exports.
-- Root Python files: the tracker, MQTT listener, web UI, and shared runtime modules.
+- `tools/`: one-off helper scripts such as TLE download.
+- `tracker/`: the tracker, MQTT listener, web UI, and shared runtime modules.
 
 ## Ultimate Beginner Guide (From Zero to Running System)
 
@@ -113,7 +113,7 @@ set +a
 7. Start MQTT listener manually (first validation run):
 
 ```bash
-python3 mqtt_tinygs_listen.py \
+python3 tracker/mqtt_tinygs_listen.py \
   --user "$TINYGS_USER" \
   --station "$TINYGS_STATION" \
   --password "$TINYGS_PASS" \
@@ -131,7 +131,7 @@ cat "$HOME/synscan_tinygs_tracker/state.json"
 
 ```bash
 cd "$HOME/synscan_tinygs_tracker"
-python3 synscan_runner.py
+python3 tracker/synscan_runner.py
 ```
 
 10. Start web UI (third terminal):
@@ -143,7 +143,7 @@ export SYNSCAN_WEB_PASSWORD=change-me
 # export SYNSCAN_WEB_USER=admin
 # export SYNSCAN_WEB_HOST=0.0.0.0
 # export SYNSCAN_WEB_PORT=8080
-python3 synscan_web.py
+python3 tracker/synscan_web.py
 ```
 
 Open `http://127.0.0.1:8080/config` locally.
@@ -183,7 +183,7 @@ sudo systemctl status mqtt_tinygs_listen@$(whoami).service \
 
 The web UI can start/stop/restart the tracker service automatically when:
 
-- `synscan_web.py` knows the correct tracker unit via `SYNSCAN_FOLLOW_SERVICE`
+- `tracker/synscan_web.py` knows the correct tracker unit via `SYNSCAN_FOLLOW_SERVICE`
 - the web process has permission to manage system services
 
 The provided `systemd/synscan-web@.service` template sets `SYNSCAN_FOLLOW_SERVICE=synscan-follow-sat@<user>.service`.
@@ -204,11 +204,11 @@ Without that sudoers rule, the dashboard and logs still work, but the web Start/
 
 ## InfluxDB + Grafana
 
-`mqtt_tinygs_listen.py` can write TinyGS state and frame data directly to InfluxDB v2.
+`tracker/mqtt_tinygs_listen.py` can write TinyGS state and frame data directly to InfluxDB v2.
 
 ![Grafana dashboard screenshot](docs/grafana.png)
 
-Dashboard files live in `dashboards/`. The repository includes only the three basic dashboards: active, passive1, and passive2. See `docs/grafana.md` for panel definitions and deployment steps.
+Dashboard files live in `dashboards/`. The repository includes only the three basic dashboards: active, passive1, and passive2. See `README_GRAFANA.md` for panel definitions and deployment steps.
 
 Configuration is via env vars (already loaded by `mqtt_tinygs_listen@.service`):
 
@@ -282,7 +282,7 @@ Grafana setup:
 
 Detailed dashboard documentation:
 
-- `docs/grafana.md`
+- `README_GRAFANA.md`
 
 ## Common Tracker Config
 
@@ -298,7 +298,7 @@ The web config page edits the common fields and keeps advanced path/status setti
 
 ## Web Auth
 
-`synscan_web.py` uses HTTP Basic Auth:
+`tracker/synscan_web.py` uses HTTP Basic Auth:
 
 - `SYNSCAN_WEB_PASSWORD`: required password (no insecure default).
 - `SYNSCAN_WEB_USER`: optional username. If empty, only password is checked.

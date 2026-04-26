@@ -9,7 +9,7 @@ User=%i
 WorkingDirectory=/home/%i/synscan_tinygs_tracker
 EnvironmentFile=/home/%i/synscan_tinygs_tracker/mqtt_tinygs_listen_passive2.env
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/home/%i/synscan_tinygs_tracker/tinygs_mqtt/env/bin/python /home/%i/synscan_tinygs_tracker/mqtt_tinygs_listen.py \
+ExecStart=/home/%i/synscan_tinygs_tracker/tinygs_mqtt/env/bin/python /home/%i/synscan_tinygs_tracker/tracker/mqtt_tinygs_listen.py \
   --user ${TINYGS_USER} \
   --station ${TINYGS_STATION} \
   --password ${TINYGS_PASS} \

@@ -15,7 +15,7 @@ from synscan_common import clamp_el, goto_azel, open_port, send_cmd
 
 app = Flask(__name__)
 
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(__file__).resolve().parents[1]
 CONFIG = BASE_DIR / "synscan_config.json"
 STATUS = BASE_DIR / "synscan_status.json"
 STATE  = BASE_DIR / "state.json"
@@ -27,7 +27,7 @@ CSRF_FIELD = "csrf_token"
 WEB_USER = os.getenv("SYNSCAN_WEB_USER", "").strip()
 WEB_PASSWORD = os.getenv("SYNSCAN_WEB_PASSWORD", "").strip()
 if not WEB_PASSWORD:
-    raise SystemExit("Set SYNSCAN_WEB_PASSWORD before starting synscan_web.py")
+    raise SystemExit("Set SYNSCAN_WEB_PASSWORD before starting tracker/synscan_web.py")
 
 def _normalize_web_host(value: str) -> str:
     """Accept host or URL input and return plain host/IP for Flask bind."""

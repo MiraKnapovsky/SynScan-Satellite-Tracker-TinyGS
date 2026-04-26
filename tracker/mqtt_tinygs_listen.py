@@ -24,7 +24,7 @@ from mqtt_storage import (
 )
 
 
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(__file__).resolve().parents[1]
 TOPIC_TAG_KEYS = ("user", "station", "channel", "cmd", "subcmd")
 GEO_FIELD_KEYS = (
     "sat_lat_deg",
@@ -103,7 +103,7 @@ def main() -> None:
     args = ap.parse_args()
 
     if not args.password:
-        raise SystemExit("Chybi heslo: dej --password nebo exportuj TINYGS_PASS")
+        raise SystemExit("Missing password: pass --password or export TINYGS_PASS")
     if args.frame_dedupe_window_s < 0:
         raise SystemExit("--frame-dedupe-window-s must be >= 0")
     if args.max_slant_range_km < 0:
@@ -179,12 +179,12 @@ def main() -> None:
     influx_cfg = [args.influx_url, args.influx_org, args.influx_bucket, args.influx_token]
     if any(influx_cfg):
         if not all(influx_cfg):
-            raise SystemExit("Pro InfluxDB je potreba zadat: --influx-url, --influx-org, --influx-bucket, --influx-token")
+            raise SystemExit("InfluxDB requires: --influx-url, --influx-org, --influx-bucket, --influx-token")
         try:
             from influxdb_client import InfluxDBClient, Point
             from influxdb_client.client.write_api import SYNCHRONOUS
         except ImportError as e:
-            raise SystemExit(f"Chybi balicek influxdb-client: {e}") from e
+            raise SystemExit(f"Missing package influxdb-client: {e}") from e
 
         influx_client = InfluxDBClient(
             url=args.influx_url,
