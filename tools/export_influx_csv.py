@@ -14,7 +14,7 @@ from typing import Dict, Iterable, Iterator, List, Optional
 from zoneinfo import ZoneInfo
 
 
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(__file__).resolve().parents[1]
 
 ENV_FILES = {
     "active": BASE_DIR / "mqtt_tinygs_listen.env",

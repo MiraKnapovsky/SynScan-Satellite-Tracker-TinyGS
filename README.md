@@ -50,6 +50,15 @@ sudo usermod -aG dialout "$USER"
 
 Log out and back in after changing groups. Python package installation is covered in the virtual environment step below.
 
+## Repository Layout
+
+- `docs/`: screenshots, wiring diagram, and detailed Grafana notes.
+- `dashboards/`: the three Grafana dashboard JSON files.
+- `examples/`: env file templates copied to local runtime env files.
+- `systemd/`: service templates copied into `/etc/systemd/system/`.
+- `tools/`: one-off helper scripts such as TLE download and local data exports.
+- Root Python files: the tracker, MQTT listener, web UI, and shared runtime modules.
+
 ## Ultimate Beginner Guide (From Zero to Running System)
 
 Use this as the single end-to-end path on a new Debian machine.
@@ -73,7 +82,7 @@ python -m pip install -r requirements.txt
 3. Create local TinyGS credential file:
 
 ```bash
-cp mqtt_tinygs_listen.env.example mqtt_tinygs_listen.env
+cp examples/mqtt_tinygs_listen.env.example mqtt_tinygs_listen.env
 ```
 
 Edit `mqtt_tinygs_listen.env` and fill in:
@@ -84,7 +93,7 @@ Edit `mqtt_tinygs_listen.env` and fill in:
 4. Download current TLE data locally (required before tracking):
 
 ```bash
-python3 import_requests.py
+python3 tools/import_requests.py
 ```
 
 5. Configure tracker in `synscan_config.json`:
@@ -147,11 +156,11 @@ The web UI shows tracker state, TinyGS/MQTT state, logs, service controls, a saf
 11. Optional: install the template systemd units after the manual test passes:
 
 ```bash
-sudo cp "$HOME/synscan_tinygs_tracker/mqtt_tinygs_listen@.service" /etc/systemd/system/
-sudo cp "$HOME/synscan_tinygs_tracker/synscan-follow-sat@.service" /etc/systemd/system/
-sudo cp "$HOME/synscan_tinygs_tracker/synscan-web@.service" /etc/systemd/system/
+sudo cp "$HOME/synscan_tinygs_tracker/systemd/mqtt_tinygs_listen@.service" /etc/systemd/system/
+sudo cp "$HOME/synscan_tinygs_tracker/systemd/synscan-follow-sat@.service" /etc/systemd/system/
+sudo cp "$HOME/synscan_tinygs_tracker/systemd/synscan-web@.service" /etc/systemd/system/
 sudo systemctl daemon-reload
-cp "$HOME/synscan_tinygs_tracker/synscan_web.env.example" "$HOME/synscan_tinygs_tracker/synscan_web.env"
+cp "$HOME/synscan_tinygs_tracker/examples/synscan_web.env.example" "$HOME/synscan_tinygs_tracker/synscan_web.env"
 editor "$HOME/synscan_tinygs_tracker/synscan_web.env"
 sudo systemctl enable --now mqtt_tinygs_listen@$(whoami).service
 sudo systemctl enable --now synscan-follow-sat@$(whoami).service
@@ -177,7 +186,7 @@ The web UI can start/stop/restart the tracker service automatically when:
 - `synscan_web.py` knows the correct tracker unit via `SYNSCAN_FOLLOW_SERVICE`
 - the web process has permission to manage system services
 
-The provided `synscan-web@.service` sets `SYNSCAN_FOLLOW_SERVICE=synscan-follow-sat@<user>.service`.
+The provided `systemd/synscan-web@.service` template sets `SYNSCAN_FOLLOW_SERVICE=synscan-follow-sat@<user>.service`.
 For service control actions on Debian, the web process still needs passwordless permission to run `systemctl` for the tracker unit.
 One narrow sudoers option is:
 
@@ -199,7 +208,7 @@ Without that sudoers rule, the dashboard and logs still work, but the web Start/
 
 ![Grafana dashboard screenshot](docs/grafana.png)
 
-Dashboard files live in `dashboards/`. The repository includes only the three basic dashboards: active, passive1, and passive2. See `README_GRAFANA.md` for panel definitions and deployment steps.
+Dashboard files live in `dashboards/`. The repository includes only the three basic dashboards: active, passive1, and passive2. See `docs/grafana.md` for panel definitions and deployment steps.
 
 Configuration is via env vars (already loaded by `mqtt_tinygs_listen@.service`):
 
@@ -239,9 +248,9 @@ The main listener writes `state.json` for the rotator. Optional passive listener
 Prepare env files:
 
 ```bash
-cp "$HOME/synscan_tinygs_tracker/mqtt_tinygs_listen_passive1.env.example" \
+cp "$HOME/synscan_tinygs_tracker/examples/mqtt_tinygs_listen_passive1.env.example" \
   "$HOME/synscan_tinygs_tracker/mqtt_tinygs_listen_passive1.env"
-cp "$HOME/synscan_tinygs_tracker/mqtt_tinygs_listen_passive2.env.example" \
+cp "$HOME/synscan_tinygs_tracker/examples/mqtt_tinygs_listen_passive2.env.example" \
   "$HOME/synscan_tinygs_tracker/mqtt_tinygs_listen_passive2.env"
 ```
 
@@ -256,8 +265,8 @@ For each passive env file:
 Install and start passive services:
 
 ```bash
-sudo cp "$HOME/synscan_tinygs_tracker/mqtt_tinygs_listen_passive1@.service" /etc/systemd/system/
-sudo cp "$HOME/synscan_tinygs_tracker/mqtt_tinygs_listen_passive2@.service" /etc/systemd/system/
+sudo cp "$HOME/synscan_tinygs_tracker/systemd/mqtt_tinygs_listen_passive1@.service" /etc/systemd/system/
+sudo cp "$HOME/synscan_tinygs_tracker/systemd/mqtt_tinygs_listen_passive2@.service" /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now mqtt_tinygs_listen_passive1@$(whoami).service
 sudo systemctl enable --now mqtt_tinygs_listen_passive2@$(whoami).service
@@ -273,7 +282,7 @@ Grafana setup:
 
 Detailed dashboard documentation:
 
-- `README_GRAFANA.md`
+- `docs/grafana.md`
 
 ## Common Tracker Config
 

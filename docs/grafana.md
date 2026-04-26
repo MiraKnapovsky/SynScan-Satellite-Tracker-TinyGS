@@ -3,9 +3,9 @@
 This document explains what is in the Grafana dashboard and how each chart is calculated.
 
 Core dashboard files:
-- `dashboards/tinygs-active-overview.json`
-- `dashboards/tinygs-passive1-overview.json`
-- `dashboards/tinygs-passive2-overview.json`
+- `../dashboards/tinygs-active-overview.json`
+- `../dashboards/tinygs-passive1-overview.json`
+- `../dashboards/tinygs-passive2-overview.json`
 
 Provisioned Grafana target:
 - `/var/lib/grafana/dashboards/tinygs-active-overview.json`
