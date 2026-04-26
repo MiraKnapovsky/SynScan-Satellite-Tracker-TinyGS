@@ -1,4 +1,4 @@
-# Grafana Dashboard Guide (TinyGS / Actively Directed 433MHz)
+# Grafana Dashboard Guide (TinyGS Active / Passive 1 / Passive 2)
 
 This document explains what is in the Grafana dashboard and how each chart is calculated.
 
@@ -7,30 +7,29 @@ Core dashboard files:
 - `dashboards/tinygs-passive1-overview.json`
 - `dashboards/tinygs-passive2-overview.json`
 
-Filtered dashboard variants are also included for `no-tianqi`, `only-tianqi`, and `common-no-tianqi` views of each station.
-
 Provisioned Grafana target:
 - `/var/lib/grafana/dashboards/tinygs-active-overview.json`
 - `/var/lib/grafana/dashboards/tinygs-passive1-overview.json`
 - `/var/lib/grafana/dashboards/tinygs-passive2-overview.json`
 
-Current dashboard metadata:
-- Title: `Aktivně směrovaná 433MHz`
+Active dashboard metadata:
+- Title: `TinyGS Active Overview`
 - UID: `tinygs-active-overview`
-- Version: `111`
+- Version: `112`
+- Bucket: `tinygs_active`
 - Default time range: `now-12h` to `now`
 - Refresh: every `30s`
 
 Passive 1 dashboard metadata:
-- Title: `Pasivní 1 433MHz`
+- Title: `TinyGS Passive 1 Overview`
 - UID: `tinygs-passive1-overview`
-- Version: `96`
+- Version: `97`
 - Bucket: `tinygs_passive1`
 
 Passive 2 dashboard metadata:
-- Title: `Pasivní 2 433MHz`
+- Title: `TinyGS Passive 2 Overview`
 - UID: `tinygs-passive2-overview`
-- Version: `6`
+- Version: `7`
 - Bucket: `tinygs_passive2`
 
 ## 1) Data Model

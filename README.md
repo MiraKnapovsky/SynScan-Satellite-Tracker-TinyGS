@@ -199,7 +199,7 @@ Without that sudoers rule, the dashboard and logs still work, but the web Start/
 
 ![Grafana dashboard screenshot](docs/grafana.png)
 
-Dashboard files live in `dashboards/`. Each station has base, `no-tianqi`, `only-tianqi`, and `common-no-tianqi` variants. See `README_GRAFANA.md` for panel definitions and deployment steps.
+Dashboard files live in `dashboards/`. The repository includes only the three basic dashboards: active, passive1, and passive2. See `README_GRAFANA.md` for panel definitions and deployment steps.
 
 Configuration is via env vars (already loaded by `mqtt_tinygs_listen@.service`):
 
