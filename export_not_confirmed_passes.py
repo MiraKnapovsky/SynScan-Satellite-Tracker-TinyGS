@@ -40,7 +40,7 @@ CSV_FIELDNAMES = [
     "state_last_seen_utc",
 ]
 
-SOURCE_ORDER = ["helix", "qfh", "linear"]
+SOURCE_ORDER = ["active", "passive1", "passive2"]
 
 
 @dataclass
@@ -96,7 +96,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--sources",
         default="all",
-        help="Comma-separated source list: helix,qfh,linear or 'all'",
+        help="Comma-separated source list: active,passive1,passive2 or 'all'",
     )
     parser.add_argument(
         "--output-dir",

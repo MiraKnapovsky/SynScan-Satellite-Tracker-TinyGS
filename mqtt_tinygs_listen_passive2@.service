@@ -1,5 +1,5 @@
 [Unit]
-Description=TinyGS MQTT listener (passive second station) for user %i
+Description=TinyGS MQTT listener (passive 2 station) for user %i
 After=network-online.target
 Wants=network-online.target
 
@@ -7,14 +7,14 @@ Wants=network-online.target
 Type=simple
 User=%i
 WorkingDirectory=/home/%i/synscan_tinygs_tracker
-EnvironmentFile=/home/%i/synscan_tinygs_tracker/mqtt_tinygs_listen_passive.env
+EnvironmentFile=/home/%i/synscan_tinygs_tracker/mqtt_tinygs_listen_passive2.env
 Environment=PYTHONUNBUFFERED=1
 ExecStart=/home/%i/synscan_tinygs_tracker/tinygs_mqtt/env/bin/python /home/%i/synscan_tinygs_tracker/mqtt_tinygs_listen.py \
   --user ${TINYGS_USER} \
   --station ${TINYGS_STATION} \
   --password ${TINYGS_PASS} \
-  --out /home/%i/synscan_tinygs_tracker/state_passive.json \
-  --confirmed-catalog-out /home/%i/synscan_tinygs_tracker/confirmed_satellites_passive.json \
+  --out /home/%i/synscan_tinygs_tracker/state_passive2.json \
+  --confirmed-catalog-out /home/%i/synscan_tinygs_tracker/confirmed_satellites_passive2.json \
   --frame-topic tinygs/${TINYGS_USER}/${TINYGS_STATION}/cmnd/frame/0
 Restart=on-failure
 RestartSec=5

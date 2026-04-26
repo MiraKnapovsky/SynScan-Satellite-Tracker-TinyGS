@@ -48,7 +48,7 @@ def main() -> None:
     ap.add_argument("--user", required=True)
     ap.add_argument("--password", default=os.getenv("TINYGS_PASS"))
     ap.add_argument("--cafile", default=os.getenv("TINYGS_CAFILE"), help="Optional path to CA bundle PEM")
-    ap.add_argument("--station", default="KNA0047Rotator")
+    ap.add_argument("--station", default="YOUR_ACTIVE_STATION")
     ap.add_argument("--state-topic", default=None, help="Override state topic (default: tinygs/<user>/<station>/cmnd/begine)")
     ap.add_argument("--frame-topic", default=None, help="Override frame topic (default: tinygs/<user>/<station>/cmnd/frame/0)")
     ap.add_argument("--out", default=str(BASE_DIR / "state.json"), help="File with latest begin config")

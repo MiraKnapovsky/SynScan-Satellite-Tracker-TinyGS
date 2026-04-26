@@ -18,14 +18,14 @@ __pycache__/
 *.tmp
 satellites.tle
 state.json
-state_passive.json
-state_linear.json
+state_passive1.json
+state_passive2.json
 synscan_status.json
 all_rx.jsonl
 raw/raw_messages.jsonl
 confirmed_satellites.json
-confirmed_satellites_passive.json
-confirmed_satellites_linear.json
+confirmed_satellites_passive1.json
+confirmed_satellites_passive2.json
 exports/
 backups/
 

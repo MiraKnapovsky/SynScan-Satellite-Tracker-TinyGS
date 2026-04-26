@@ -17,9 +17,9 @@ from zoneinfo import ZoneInfo
 BASE_DIR = Path(__file__).resolve().parent
 
 ENV_FILES = {
-    "helix": BASE_DIR / "mqtt_tinygs_listen.env",
-    "qfh": BASE_DIR / "mqtt_tinygs_listen_passive.env",
-    "linear": BASE_DIR / "mqtt_tinygs_listen_linear.env",
+    "active": BASE_DIR / "mqtt_tinygs_listen.env",
+    "passive1": BASE_DIR / "mqtt_tinygs_listen_passive1.env",
+    "passive2": BASE_DIR / "mqtt_tinygs_listen_passive2.env",
 }
 
 CSV_FIELDNAMES = [
@@ -319,7 +319,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--sources",
         default="all",
-        help="Comma-separated source list: helix,qfh,linear or 'all'",
+        help="Comma-separated source list: active,passive1,passive2 or 'all'",
     )
     parser.add_argument(
         "--output-dir",
