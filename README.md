@@ -140,7 +140,7 @@ python3 synscan_web.py
 Open `http://127.0.0.1:8080/config` locally.
 If you set `SYNSCAN_WEB_HOST=0.0.0.0`, open `http://<debian-host-ip>:8080/config` from another machine.
 
-![SynScan web UI screenshot](docs/synscan_tracker.png)
+![SynScan Follow Sat config page screenshot](docs/synscan_tracker.png)
 
 The web UI shows tracker state, TinyGS/MQTT state, logs, service controls, a safe config form, and manual goto/stop controls.
 
