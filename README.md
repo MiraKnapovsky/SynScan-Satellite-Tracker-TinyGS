@@ -7,21 +7,21 @@ This project tracks satellites with a SynScan mount, using TinyGS MQTT state upd
 - A Debian/Raspberry Pi control layer that connects TinyGS MQTT data with a SynScan antenna rotator.
 - It reads the currently relevant satellite from TinyGS state updates, resolves it by NORAD, and computes azimuth/elevation from local TLE data.
 - It moves a directional antenna automatically, while also exposing a web UI for status, config changes, logs, and manual override.
-- It can store receive telemetry in InfluxDB/Grafana and can also run a second passive TinyGS station in parallel.
-- The main use case is a LoRa satellite receive station with one tracked directional antenna and an optional omnidirectional monitor antenna.
+- It can store receive telemetry in InfluxDB/Grafana and can also run passive QFH and linear TinyGS stations in parallel.
+- The main use case is a LoRa satellite receive station with one tracked directional antenna and optional passive monitor antennas.
 
 ## Wiring Diagram
 
 ![System setup and wiring diagram](docs/system-setup.svg)
 
-This diagram reflects the intended project layout: one directional station on a SynScan rotator, one optional passive station, and a Debian host that glues TinyGS, control, and observability together.
+This diagram reflects the intended project layout: one directional station on a SynScan rotator, optional passive stations, and a Debian host that glues TinyGS, control, and observability together.
 
 ## Who Is This For
 
 - People already running, or planning to run, a TinyGS-compatible LoRa receive station on Debian or Raspberry Pi.
 - Users with a SynScan mount or rotator who want automatic satellite tracking instead of only manual pointing.
 - Builders who want one machine to handle MQTT ingest, rotator control, a local web UI, and optional InfluxDB/Grafana telemetry.
-- Operators who may use two RF paths: a directional tracked antenna and a second passive omnidirectional antenna.
+- Operators who may use multiple RF paths: a directional tracked antenna plus passive QFH or linear monitor antennas.
 
 ## Minimum Hardware Setup
 
@@ -33,7 +33,7 @@ This diagram reflects the intended project layout: one directional station on a 
 
 Optional but supported:
 
-- A second ESP32 LoRa receiver with an omnidirectional antenna for passive monitoring.
+- Additional ESP32 LoRa receivers with passive antennas for QFH or linear monitoring.
 - InfluxDB and Grafana for telemetry, pass analysis, and dashboards.
 
 ## Platform Notes
@@ -55,11 +55,14 @@ Optional but supported:
 - `mqtt_geo.py`: TLE-based satellite lookup and geometry calculations.
 - `import_requests.py`: downloads supported TinyGS satellites and writes local `satellites.tle`.
 - `synscan_common.py`: shared serial protocol + az/el conversion utilities.
+- `export_influx_csv.py`: exports TinyGS frame telemetry from configured InfluxDB buckets into CSV.
+- `export_not_confirmed_passes.py`: exports pass-level CONFIRMED / NOT_CONFIRMED CSV summaries.
 
 ## Runtime Files
 
 - `synscan_config.json`: tracker configuration used by `synscan_runner.py`.
 - `state.json`: latest TinyGS state (updated by MQTT listener).
+- `state_passive.json`, `state_linear.json`: latest passive station states when QFH/linear listeners are enabled.
 - `synscan_status.json`: live tracker status (updated by `synscan_follow_sat.py`).
 - `satellites.tle`: local generated TLE dataset used for tracking.
 - `all_rx.jsonl`: optional frame packet archive (only when listener is started with `--rx-out`).
@@ -266,14 +269,15 @@ sudo systemctl enable --now mqtt_tinygs_listen@alice.service
 sudo systemctl status mqtt_tinygs_listen@alice.service
 ```
 
-## Second MQTT Station (Grafana Only)
+## Additional MQTT Stations (Grafana Only)
 
-This project now has a simple two-station layout:
+This project now has a simple three-station layout:
 
 - Main station: recommended `mqtt_tinygs_listen@.service`, writes `state.json` for the rotator.
 - Second passive station: new `mqtt_tinygs_listen_passive@.service`, writes to a separate bucket and never affects the rotator.
+- Third passive station: new `mqtt_tinygs_listen_linear@.service`, writes to its own bucket and never affects the rotator.
 
-Prepare env file for the second station:
+Prepare env file for the QFH station:
 
 ```bash
 cp "$HOME/synscan_tinygs_tracker/mqtt_tinygs_listen_passive.env.example" \
@@ -290,7 +294,7 @@ MQTT login stays the same as for the rotator station:
 Recommended values for `KNA0047QFH`:
 
 ```bash
-TINYGS_USER=1472927374
+TINYGS_USER=YOUR_USER_ID
 TINYGS_STATION=KNA0047QFH
 TINYGS_PASS=YOUR_PASSWORD
 INFLUXDB_URL=http://127.0.0.1:8086
@@ -346,6 +350,10 @@ Useful log command:
 journalctl -u mqtt_tinygs_listen_passive@$(whoami).service -f
 ```
 
+Ready-made Grafana dashboard:
+
+- `dashboards/tinygs-qfh-overview.json`
+
 This passive service always:
 
 - writes to `state_passive.json` instead of `state.json`
@@ -366,6 +374,78 @@ Detailed dashboard documentation:
 
 - `README_GRAFANA.md`
 
+### Third MQTT Station (`KNA0047Linear`, Grafana Only)
+
+Prepare env file for the linear station:
+
+```bash
+cp "$HOME/synscan_tinygs_tracker/mqtt_tinygs_listen_linear.env.example" \
+  "$HOME/synscan_tinygs_tracker/mqtt_tinygs_listen_linear.env"
+```
+
+Recommended values for `KNA0047Linear`:
+
+```bash
+TINYGS_USER=YOUR_USER_ID
+TINYGS_STATION=KNA0047Linear
+TINYGS_PASS=YOUR_PASSWORD
+INFLUXDB_URL=http://127.0.0.1:8086
+INFLUXDB_ORG=your-org
+INFLUXDB_BUCKET=tinygs_kna0047linear
+INFLUXDB_TOKEN=your-token
+INFLUXDB_MEAS_FRAME=tinygs_frame
+INFLUXDB_MEAS_STATE=tinygs_state
+INFLUXDB_MEAS_META=tinygs_meta
+TINYGS_TRACKER_STATUS_FILE=
+```
+
+Fastest setup is usually:
+
+```bash
+cp "$HOME/synscan_tinygs_tracker/mqtt_tinygs_listen.env" \
+  "$HOME/synscan_tinygs_tracker/mqtt_tinygs_listen_linear.env"
+```
+
+Then edit only:
+
+- `TINYGS_STATION=KNA0047Linear`
+- `INFLUXDB_BUCKET=tinygs_kna0047linear`
+- `TINYGS_TRACKER_STATUS_FILE=`
+
+Manual test run for the linear station:
+
+```bash
+set -a
+source "$HOME/synscan_tinygs_tracker/mqtt_tinygs_listen_linear.env"
+set +a
+python3 "$HOME/synscan_tinygs_tracker/mqtt_tinygs_listen.py" \
+  --user "$TINYGS_USER" \
+  --station "$TINYGS_STATION" \
+  --password "$TINYGS_PASS" \
+  --out "$HOME/synscan_tinygs_tracker/state_linear.json" \
+  --confirmed-catalog-out "$HOME/synscan_tinygs_tracker/confirmed_satellites_linear.json" \
+  --frame-topic tinygs/${TINYGS_USER}/${TINYGS_STATION}/cmnd/frame/0
+```
+
+Install and start the linear systemd service:
+
+```bash
+sudo cp "$HOME/synscan_tinygs_tracker/mqtt_tinygs_listen_linear@.service" /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now mqtt_tinygs_listen_linear@$(whoami).service
+sudo systemctl status mqtt_tinygs_listen_linear@$(whoami).service
+```
+
+Useful log command:
+
+```bash
+journalctl -u mqtt_tinygs_listen_linear@$(whoami).service -f
+```
+
+Ready-made Grafana dashboard:
+
+- `dashboards/tinygs-linear-overview.json`
+
 ## `synscan_config.json` Keys
 
 - `dummy`: `true` to log commands only (no serial writes).
@@ -376,7 +456,10 @@ Detailed dashboard documentation:
 - `min_el`: minimum elevation threshold.
 - `interval`: control loop period in seconds.
 - `lead`: prediction lead time in seconds.
+- `max_az_step`, `max_el_step`: per-command move caps for segmented long slews; `0` disables the cap.
 - `wrap_limit`, `wrap_margin`, `plan_horizon`, `plan_step`, `az_home`: cable-wrap planning controls.
+- `elevation_offset_deg`: extra elevation added at `0°`, linearly tapering to `0°` at `90°`.
+- `invert_elevation`: if `true`, the tracker sends elevation to the mount as `90 - el`.
 - `status_file`, `status_every`: tracker status JSON path and write interval.
 
 Web UI note:

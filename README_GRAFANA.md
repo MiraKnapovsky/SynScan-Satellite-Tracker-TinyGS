@@ -2,32 +2,44 @@
 
 This document explains what is in the Grafana dashboard and how each chart is calculated.
 
-Dashboard file:
+Core dashboard files:
 - `dashboards/tinygs-overview.json`
 - `dashboards/tinygs-qfh-overview.json`
+- `dashboards/tinygs-linear-overview.json`
+
+Filtered dashboard variants are also included for `no-tianqi`, `only-tianqi`, and `common-no-tianqi` views of each station.
 
 Provisioned Grafana target:
 - `/var/lib/grafana/dashboards/tinygs-overview.json`
 - `/var/lib/grafana/dashboards/tinygs-qfh-overview.json`
+- `/var/lib/grafana/dashboards/tinygs-linear-overview.json`
 
 Current dashboard metadata:
-- Title: `Helix Rotator 433MHz`
+- Title: `Helix Rotátor 433MHz`
 - UID: `tinygs-overview`
-- Version: `87`
+- Version: `111`
 - Default time range: `now-12h` to `now`
 - Refresh: every `30s`
 
 QFH dashboard metadata:
 - Title: `QFH 433MHz`
 - UID: `tinygs-qfh-overview`
+- Version: `96`
 - Bucket: `tinygs_kna0047qfh`
+
+Linear dashboard metadata:
+- Title: `Linear 433MHz`
+- UID: `tinygs-linear-overview`
+- Version: `6`
+- Bucket: `tinygs_kna0047linear`
 
 ## 1) Data Model
 
 The Helix dashboard reads from bucket `tinygs`.
 The QFH dashboard reads from bucket `tinygs_kna0047qfh`.
+The Linear dashboard reads from bucket `tinygs_kna0047linear`.
 
-Both dashboards use these measurements:
+All dashboards use these measurements:
 
 - `tinygs_state`
   - Source: TinyGS `cmnd/begine` messages.
@@ -206,13 +218,16 @@ Recommended workflow:
 1. Edit:
    - `synscan_tinygs_tracker/dashboards/tinygs-overview.json`
    - `synscan_tinygs_tracker/dashboards/tinygs-qfh-overview.json`
+   - `synscan_tinygs_tracker/dashboards/tinygs-linear-overview.json`
 2. Validate JSON:
    - `python3 -m json.tool synscan_tinygs_tracker/dashboards/tinygs-overview.json > /dev/null`
    - `python3 -m json.tool synscan_tinygs_tracker/dashboards/tinygs-qfh-overview.json > /dev/null`
+   - `python3 -m json.tool synscan_tinygs_tracker/dashboards/tinygs-linear-overview.json > /dev/null`
 3. Increment `version` in dashboard JSON.
 4. Deploy to Grafana provisioning path:
    - `sudo cp synscan_tinygs_tracker/dashboards/tinygs-overview.json /var/lib/grafana/dashboards/tinygs-overview.json`
    - `sudo cp synscan_tinygs_tracker/dashboards/tinygs-qfh-overview.json /var/lib/grafana/dashboards/tinygs-qfh-overview.json`
+   - `sudo cp synscan_tinygs_tracker/dashboards/tinygs-linear-overview.json /var/lib/grafana/dashboards/tinygs-linear-overview.json`
 5. Refresh Grafana dashboard page.
 
 ## 9) Quick Troubleshooting

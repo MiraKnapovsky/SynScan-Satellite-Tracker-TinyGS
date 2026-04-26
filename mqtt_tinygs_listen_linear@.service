@@ -1,0 +1,23 @@
+[Unit]
+Description=TinyGS MQTT listener (passive linear station) for user %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=%i
+WorkingDirectory=/home/%i/synscan_tinygs_tracker
+EnvironmentFile=/home/%i/synscan_tinygs_tracker/mqtt_tinygs_listen_linear.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/%i/synscan_tinygs_tracker/tinygs_mqtt/env/bin/python /home/%i/synscan_tinygs_tracker/mqtt_tinygs_listen.py \
+  --user ${TINYGS_USER} \
+  --station ${TINYGS_STATION} \
+  --password ${TINYGS_PASS} \
+  --out /home/%i/synscan_tinygs_tracker/state_linear.json \
+  --confirmed-catalog-out /home/%i/synscan_tinygs_tracker/confirmed_satellites_linear.json \
+  --frame-topic tinygs/${TINYGS_USER}/${TINYGS_STATION}/cmnd/frame/0
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

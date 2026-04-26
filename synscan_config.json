@@ -1,5 +1,5 @@
 {
-  "dummy": true,
+  "dummy": false,
   "port": "/dev/ttyUSB0",
   "lat": 49.831,
   "lon": 18.162,
@@ -7,13 +7,17 @@
   "tle": "satellites.tle",
   "state": "state.json",
   "min_el": 0.0,
-  "interval": 0.5,
-  "lead": 0.8,
-  "wrap_limit": 270.0,
-  "wrap_margin": 10.0,
+  "interval": 0.25,
+  "lead": 1.0,
+  "max_az_step": 90.0,
+  "max_el_step": 50.0,
+  "wrap_limit": 300.0,
+  "wrap_margin": 20.0,
   "plan_horizon": 2400.0,
   "plan_step": 2.0,
   "az_home": 0.0,
+  "invert_elevation": true,
+  "elevation_offset_deg": 5.0,
   "status_file": "synscan_status.json",
   "status_every": 1.0
 }

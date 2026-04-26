@@ -148,6 +148,12 @@ TEMPLATE = r"""
       <label>lead (predikční náskok v s)</label>
       <input name="lead" value="{{ c.get('lead',0.8) }}">
 
+      <label>max_az_step (max. azimut na jeden krok; 0 vypne segmentaci)</label>
+      <input name="max_az_step" value="{{ c.get('max_az_step', 0.0) }}">
+
+      <label>max_el_step (max. elevace na jeden krok; 0 vypne segmentaci)</label>
+      <input name="max_el_step" value="{{ c.get('max_el_step', 0.0) }}">
+
       <label>wrap_limit (kabelový limit azimut +/- °)</label>
       <input name="wrap_limit" value="{{ c.get('wrap_limit',270.0) }}">
 
@@ -162,6 +168,12 @@ TEMPLATE = r"""
 
       <label>az_home (bezpečný azimut pro odmotání)</label>
       <input name="az_home" value="{{ c.get('az_home',0.0) }}">
+
+      <label>invert_elevation (obrátit elevaci do montáže)</label>
+      <input type="checkbox" name="invert_elevation" {% if c.get('invert_elevation') %}checked{% endif %}>
+
+      <label>elevation_offset_deg (korekce při 0°, lineárně mizí do 90°)</label>
+      <input name="elevation_offset_deg" value="{{ c.get('elevation_offset_deg', 0.0) }}">
 
       <div class="row" style="margin-top:14px;">
         <button class="btn" type="submit">Uložit + restart služby</button>
@@ -518,6 +530,17 @@ def _get_port() -> str:
     cfg = load_cfg()
     return cfg.get("port") or "/dev/ttyUSB0"
 
+def _invert_elevation_enabled() -> bool:
+    cfg = load_cfg()
+    return bool(cfg.get("invert_elevation", False))
+
+def _elevation_offset_deg() -> float:
+    cfg = load_cfg()
+    try:
+        return float(cfg.get("elevation_offset_deg", 0.0))
+    except (TypeError, ValueError):
+        return 0.0
+
 @app.get("/api/status")
 def api_status():
     return jsonify({"service": service_state(), "status": load_status()})
@@ -545,7 +568,13 @@ def api_manual_goto():
     try:
         el_send = clamp_el(el_user)
         with open_port(_get_port()) as ser:
-            cmd, ok = goto_azel(ser, az_user, el_send)
+            cmd, ok = goto_azel(
+                ser,
+                az_user,
+                el_send,
+                invert_elevation=_invert_elevation_enabled(),
+                elevation_offset_deg=_elevation_offset_deg(),
+            )
         if not ok:
             return jsonify({"ok": False, "error": "Montáž neodpověděla."}), 500
     except Exception as e:
@@ -598,6 +627,8 @@ def config_post():
     state_fixed = str(current_cfg.get("state") or (BASE_DIR / "state.json"))
     status_file_fixed = str(current_cfg.get("status_file") or (BASE_DIR / "synscan_status.json"))
     interval_fixed = float(current_cfg.get("interval", 0.5))
+    max_az_step_fixed = float(current_cfg.get("max_az_step", 0.0))
+    max_el_step_fixed = float(current_cfg.get("max_el_step", 0.0))
     status_every_fixed = float(current_cfg.get("status_every", 1.0))
 
     try:
@@ -612,11 +643,15 @@ def config_post():
             "min_el": parse_float_field("min_el", 10.0),
             "interval": interval_fixed,
             "lead": parse_float_field("lead", 0.8),
+            "max_az_step": parse_float_field("max_az_step", max_az_step_fixed),
+            "max_el_step": parse_float_field("max_el_step", max_el_step_fixed),
             "wrap_limit": parse_float_field("wrap_limit", 270.0),
             "wrap_margin": parse_float_field("wrap_margin", 10.0),
             "plan_horizon": parse_float_field("plan_horizon", 2400.0),
             "plan_step": parse_float_field("plan_step", 2.0),
             "az_home": parse_float_field("az_home", 0.0),
+            "invert_elevation": (request.form.get("invert_elevation") == "on"),
+            "elevation_offset_deg": parse_float_field("elevation_offset_deg", 0.0),
             "status_file": status_file_fixed,
             "status_every": status_every_fixed,
         }
