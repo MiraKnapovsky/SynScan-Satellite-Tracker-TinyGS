@@ -11,7 +11,7 @@ This project tracks satellites with a SynScan mount, using TinyGS MQTT state upd
 
 ## Wiring Diagram
 
-![System setup and wiring diagram](docs/system-setup.svg)
+![System setup and wiring diagram](docs/system-setup.png)
 
 This diagram reflects the intended project layout: one directional station on a SynScan rotator, optional passive stations, and a Debian host that glues TinyGS, control, and observability together.
 
