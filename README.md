@@ -76,15 +76,25 @@ cd "$HOME/synscan_tinygs_tracker"
 
 ## Requirements
 
-- Python 3.10+ (tested with Python 3.11).
-- Access to serial port device (for real mount mode).
 - Debian GNU/Linux with `systemd` (required for the provided service setup).
+- Python 3.10+ (tested with Python 3.11).
+- `git`, `python3-venv`, and `python3-pip`.
+- Access to the serial port device for real mount mode.
 
-Install Python dependencies:
+Install baseline Debian packages:
 
 ```bash
-python3 -m pip install -r requirements.txt
+sudo apt update
+sudo apt install -y git python3 python3-venv python3-pip
 ```
+
+For real mount mode, make sure the Linux user can open the serial adapter. On Debian this is usually the `dialout` group:
+
+```bash
+sudo usermod -aG dialout "$USER"
+```
+
+Log out and back in after changing groups. Python package installation is covered in the virtual environment step below.
 
 ## Ultimate Beginner Guide (From Zero to Running System)
 
@@ -124,7 +134,7 @@ python3 import_requests.py
 ```
 
 5. Configure tracker in `synscan_config.json`:
-- First safe setup: keep `dummy: true`.
+- First safe setup: keep `dummy: true`. In this mode the tracker logs mount commands but does not open the serial port.
 - Real movement later: set `dummy: false` and confirm `port`, `lat`, `lon`, `alt`.
 - Target selection reads `NORAD` from `state.json`.
 - When `NORAD` is missing in `state.json`, tracker switches to surveillance/neutral position.
@@ -225,7 +235,20 @@ The web UI can start/stop/restart the tracker service automatically when:
 - the web process has permission to manage system services
 
 The provided `synscan-web@.service` sets `SYNSCAN_FOLLOW_SERVICE=synscan-follow-sat@<user>.service`.
-For service control actions on Debian, the web process still needs permission to run `systemctl` as root.
+For service control actions on Debian, the web process still needs passwordless permission to run `systemctl` for the tracker unit.
+One narrow sudoers option is:
+
+```bash
+sudo visudo -f /etc/sudoers.d/synscan-web
+```
+
+Add this line, replacing `<user>` with the Linux user that runs the web service:
+
+```text
+<user> ALL=(root) NOPASSWD: /usr/bin/systemctl start synscan-follow-sat@<user>.service, /usr/bin/systemctl stop synscan-follow-sat@<user>.service, /usr/bin/systemctl restart synscan-follow-sat@<user>.service
+```
+
+Without that sudoers rule, the dashboard and logs still work, but the web Start/Stop/Restart buttons fail.
 
 13. Optional: if you want only the listener as a service:
 
@@ -385,7 +408,7 @@ This passive service always:
 
 Grafana setup:
 
-1. Add data source `InfluxDB` (Flux or InfluxQL according to your Influx setup).
+1. Add an InfluxDB Flux data source in Grafana. The bundled dashboard JSON expects datasource UID `tinygs-influx`.
 2. Select the station bucket you configured, for example `tinygs_active`, `tinygs_passive1`, or `tinygs_passive2`.
 3. Build panels from:
    - `tinygs_frame`: `rssi_db`, `snr_db`, `freq_error_hz`, `confirmed`, `crc_error` by `satellite`.
@@ -479,6 +502,8 @@ Both scripts read InfluxDB connection settings from these local env files:
 - `mqtt_tinygs_listen.env` for source `active`
 - `mqtt_tinygs_listen_passive1.env` for source `passive1`
 - `mqtt_tinygs_listen_passive2.env` for source `passive2`
+
+They call the `influx` CLI, so install and configure the InfluxDB command line client on the machine where you run exports.
 
 Example:
 

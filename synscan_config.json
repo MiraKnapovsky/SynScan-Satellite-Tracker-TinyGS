@@ -1,5 +1,5 @@
 {
-  "dummy": false,
+  "dummy": true,
   "port": "/dev/ttyUSB0",
   "lat": 49.831,
   "lon": 18.162,
