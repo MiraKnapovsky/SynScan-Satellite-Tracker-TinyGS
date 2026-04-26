@@ -1,0 +1,2844 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": 2,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "tinygs-influx"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "#FF9830",
+                  "index": 1,
+                  "text": "UNACTIVE"
+                },
+                "1": {
+                  "color": "#73BF69",
+                  "index": 0,
+                  "text": "ACTIVE"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 4,
+        "x": 0,
+        "y": 0
+      },
+      "id": 17,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.3.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "tinygs-influx"
+          },
+          "query": "from(bucket: \"tinygs_passive2\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == \"tinygs_state\")\n  |> keep(columns: [\"_time\"])\n  |> group()\n  |> sort(columns: [\"_time\"], desc: true)\n  |> limit(n: 1)\n  |> map(fn: (r) => ({\n      _time: now(),\n      _value: if uint(v: now()) - uint(v: r._time) <= uint(v: 300000000000) then 1.0 else 0.0\n    }))\n  |> keep(columns: [\"_time\", \"_value\"])",
+          "refId": "A"
+        }
+      ],
+      "title": "Station status",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "tinygs-influx"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 4,
+        "x": 4,
+        "y": 0
+      },
+      "id": 36,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.3.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "tinygs-influx"
+          },
+          "query": "import \"array\"\n\nconfirmed = from(bucket: \"tinygs_passive2\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"tinygs_frame\")\n  |> filter(fn: (r) => r._field == \"confirmed\")\n  |> filter(fn: (r) => r._value == true)\n  |> group()\n  |> count(column: \"_value\")\n  |> keep(columns: [\"_value\"])\n\nfallback = array.from(rows: [{_value: 0}])\n\nunion(tables: [confirmed, fallback])\n  |> group()\n  |> max(column: \"_value\")\n  |> keep(columns: [\"_value\"])",
+          "refId": "A"
+        }
+      ],
+      "title": "CONFIRMED messages",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "tinygs-influx"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 3000
+              },
+              {
+                "color": "red",
+                "value": 9000
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 4,
+        "x": 8,
+        "y": 0
+      },
+      "id": 15,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.3.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "tinygs-influx"
+          },
+          "query": "from(bucket: \"tinygs_passive2\")\n  |> range(start: -30d)\n  |> filter(fn: (r) => r._measurement == \"tinygs_frame\")\n  |> filter(fn: (r) => r._field == \"confirmed\")\n  |> filter(fn: (r) => r._value == true)\n  |> filter(fn: (r) => exists r.satellite)\n  |> group()\n  |> sort(columns: [\"_time\"], desc: true)\n  |> limit(n: 1)\n  |> map(fn: (r) => ({\n      _time: now(),\n      _value: float(v: uint(v: now()) - uint(v: r._time)) / 1000000000.0,\n      satellite: r.satellite\n    }))\n  |> keep(columns: [\"_time\", \"_value\", \"satellite\"])",
+          "refId": "A"
+        }
+      ],
+      "title": "Last CONFIRMED message",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "tinygs-influx"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "received_utc"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeAsIso"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "distance_km"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "lengthkm"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "elevation_deg"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "degree"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "latitude"
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "legend": true,
+                  "tooltip": true,
+                  "viz": false
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "longitude"
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "legend": true,
+                  "tooltip": true,
+                  "viz": false
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 11,
+      "options": {
+        "basemap": {
+          "name": "Layer 0",
+          "noRepeat": false,
+          "type": "default"
+        },
+        "controls": {
+          "mouseWheelZoom": true,
+          "showAttribution": false,
+          "showDebug": false,
+          "showMeasure": false,
+          "showScale": false,
+          "showZoom": true
+        },
+        "layers": [
+          {
+            "config": {
+              "showLegend": true,
+              "style": {
+                "color": {
+                  "fixed": "#73BF69",
+                  "mode": "fixed"
+                },
+                "opacity": 0.6,
+                "size": {
+                  "fixed": 7,
+                  "max": 15,
+                  "min": 4
+                },
+                "symbol": {
+                  "fixed": "img/icons/marker/circle.svg",
+                  "mode": "fixed"
+                },
+                "textConfig": {
+                  "fontSize": 12,
+                  "offsetX": 0,
+                  "offsetY": 0,
+                  "textAlign": "center",
+                  "textBaseline": "middle"
+                }
+              }
+            },
+            "filterData": {
+              "id": "byRefId",
+              "options": "A"
+            },
+            "location": {
+              "latitude": "latitude",
+              "longitude": "longitude",
+              "mode": "coords"
+            },
+            "name": "CONFIRMED",
+            "tooltip": true,
+            "type": "markers"
+          },
+          {
+            "config": {
+              "showLegend": true,
+              "style": {
+                "color": {
+                  "fixed": "#FF9830",
+                  "mode": "fixed"
+                },
+                "opacity": 0.6,
+                "rotation": {
+                  "fixed": 0,
+                  "max": 360,
+                  "min": -360,
+                  "mode": "mod"
+                },
+                "size": {
+                  "fixed": 7,
+                  "max": 15,
+                  "min": 4
+                },
+                "symbol": {
+                  "fixed": "img/icons/marker/circle.svg",
+                  "mode": "fixed"
+                },
+                "textConfig": {
+                  "fontSize": 12,
+                  "offsetX": 0,
+                  "offsetY": 0,
+                  "textAlign": "center",
+                  "textBaseline": "middle"
+                }
+              }
+            },
+            "filterData": {
+              "id": "byRefId",
+              "options": "B"
+            },
+            "layer-tooltip": false,
+            "location": {
+              "latitude": "latitude",
+              "longitude": "longitude",
+              "mode": "coords"
+            },
+            "name": "CRC ERROR",
+            "tooltip": true,
+            "type": "markers"
+          },
+          {
+            "config": {
+              "showLegend": true,
+              "style": {
+                "color": {
+                  "fixed": "#5794F2",
+                  "mode": "fixed"
+                },
+                "opacity": 1,
+                "size": {
+                  "fixed": 9,
+                  "max": 15,
+                  "min": 4
+                },
+                "symbol": {
+                  "fixed": "img/icons/marker/star.svg",
+                  "mode": "fixed"
+                },
+                "textConfig": {
+                  "fontSize": 12,
+                  "offsetX": 0,
+                  "offsetY": 0,
+                  "textAlign": "center",
+                  "textBaseline": "middle"
+                }
+              }
+            },
+            "filterData": {
+              "id": "byRefId",
+              "options": "C"
+            },
+            "location": {
+              "latitude": "latitude",
+              "longitude": "longitude",
+              "mode": "coords"
+            },
+            "name": "Station",
+            "tooltip": true,
+            "type": "markers"
+          }
+        ],
+        "tooltip": {
+          "mode": "details"
+        },
+        "view": {
+          "allLayers": true,
+          "id": "fit",
+          "lat": 0,
+          "lon": 0,
+          "noRepeat": false,
+          "shared": true,
+          "zoom": 3
+        }
+      },
+      "pluginVersion": "12.3.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "tinygs-influx"
+          },
+          "query": "from(bucket: \"tinygs_passive2\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"tinygs_frame\")\n  |> filter(fn: (r) => r.decode_status == \"confirmed\")\n  |> filter(fn: (r) => r._field == \"sat_lat_deg\" or r._field == \"sat_lon_deg\" or r._field == \"slant_range_km\" or r._field == \"sat_el_deg\")\n  |> pivot(rowKey: [\"_time\", \"satellite\", \"decode_status\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> filter(fn: (r) => exists r.sat_lat_deg and exists r.sat_lon_deg)\n  |> keep(columns: [\"_time\", \"satellite\", \"decode_status\", \"slant_range_km\", \"sat_el_deg\", \"sat_lat_deg\", \"sat_lon_deg\"])\n  |> rename(columns: {_time: \"received_utc\", decode_status: \"status\", slant_range_km: \"distance_km\", sat_el_deg: \"elevation_deg\", sat_lat_deg: \"latitude\", sat_lon_deg: \"longitude\"})\n  |> group()\n  |> sort(columns: [\"received_utc\"], desc: true)",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "tinygs-influx"
+          },
+          "query": "from(bucket: \"tinygs_passive2\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"tinygs_frame\")\n  |> filter(fn: (r) => r.decode_status == \"crc_error\")\n  |> filter(fn: (r) => r._field == \"sat_lat_deg\" or r._field == \"sat_lon_deg\" or r._field == \"slant_range_km\" or r._field == \"sat_el_deg\")\n  |> pivot(rowKey: [\"_time\", \"satellite\", \"decode_status\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> filter(fn: (r) => exists r.sat_lat_deg and exists r.sat_lon_deg)\n  |> keep(columns: [\"_time\", \"satellite\", \"decode_status\", \"slant_range_km\", \"sat_el_deg\", \"sat_lat_deg\", \"sat_lon_deg\"])\n  |> rename(columns: {_time: \"received_utc\", decode_status: \"status\", slant_range_km: \"distance_km\", sat_el_deg: \"elevation_deg\", sat_lat_deg: \"latitude\", sat_lon_deg: \"longitude\"})\n  |> group()\n  |> sort(columns: [\"received_utc\"], desc: true)",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "tinygs-influx"
+          },
+          "query": "import \"array\"\n\ndynamic = from(bucket: \"tinygs_passive2\")\n  |> range(start: -30d)\n  |> filter(fn: (r) => r._measurement == \"tinygs_state\")\n  |> filter(fn: (r) => r._field == \"station_lat_deg\" or r._field == \"station_lon_deg\")\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> filter(fn: (r) => exists r.station_lat_deg and exists r.station_lon_deg)\n  |> group()\n  |> sort(columns: [\"_time\"], desc: true)\n  |> limit(n: 1)\n  |> map(fn: (r) => ({\n      _time: r._time,\n      latitude: r.station_lat_deg,\n      longitude: r.station_lon_deg,\n      satellite: \"Ground station\",\n      status: \"station\",\n      distance_km: 0.0,\n      elevation_deg: 0.0\n    }))\n\nfallback = array.from(rows: [{\n  _time: time(v: 0),\n  latitude: 49.831,\n  longitude: 20.162,\n  satellite: \"Ground station\",\n  status: \"station\",\n  distance_km: 0.0,\n  elevation_deg: 0.0\n}])\n\nunion(tables: [dynamic, fallback])\n  |> group()\n  |> sort(columns: [\"_time\"], desc: true)\n  |> limit(n: 1)",
+          "refId": "C"
+        }
+      ],
+      "title": "RX map (satellite position at receive time)",
+      "type": "geomap"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "tinygs-influx"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "decimals": 0,
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 0,
+        "y": 3
+      },
+      "id": 9,
+      "options": {
+        "displayLabels": [],
+        "legend": {
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true,
+          "values": []
+        },
+        "pieType": "pie",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "sort": "desc",
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "12.3.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "tinygs-influx"
+          },
+          "query": "from(bucket: \"tinygs_passive2\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"tinygs_frame\")\n  |> filter(fn: (r) => r._field == \"confirmed\")\n  |> filter(fn: (r) => r._value == true)\n  |> filter(fn: (r) => exists r.satellite)\n  |> group(columns: [\"satellite\"])\n  |> count(column: \"_value\")\n  |> keep(columns: [\"satellite\", \"_value\"])\n  |> group()\n  |> pivot(rowKey: [], columnKey: [\"satellite\"], valueColumn: \"_value\")",
+          "refId": "A"
+        }
+      ],
+      "title": "Satellites by CONFIRMED messages",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "tinygs-influx"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 4,
+        "x": 8,
+        "y": 3
+      },
+      "id": 13,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.3.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "tinygs-influx"
+          },
+          "query": "from(bucket: \"tinygs_passive2\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"tinygs_frame\")\n  |> filter(fn: (r) => r._field == \"confirmed\")\n  |> filter(fn: (r) => r._value == true)\n  |> filter(fn: (r) => exists r.satellite)\n  |> group(columns: [\"satellite\"])\n  |> first()\n  |> group()\n  |> count(column: \"_value\")\n  |> keep(columns: [\"_value\"])",
+          "refId": "A"
+        }
+      ],
+      "title": "unique satellites CONFIRMED (time frame)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "tinygs-influx"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 4,
+        "x": 8,
+        "y": 6
+      },
+      "id": 10,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.3.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "tinygs-influx"
+          },
+          "query": "import \"strings\"\nimport \"regexp\"\n\nsat_key = (name) => strings.trim(\n  v: regexp.replaceAllString(\n    r: /-+/,\n    v: regexp.replaceAllString(\n      r: /[^a-z0-9]+/,\n      v: strings.toLower(v: strings.replaceAll(v: name, t: \"_\", u: \"-\")),\n      t: \"-\"\n    ),\n    t: \"-\"\n  ),\n  cutset: \"-\"\n)\n\nunion(tables: [\n  from(bucket: \"tinygs_active\")\n    |> range(start: 0, stop: now())\n    |> filter(fn: (r) => r._measurement == \"tinygs_frame\")\n    |> filter(fn: (r) => r._field == \"confirmed\")\n    |> filter(fn: (r) => r._value == true)\n    |> filter(fn: (r) => exists r.satellite),\n  from(bucket: \"tinygs_passive2\")\n    |> range(start: 0, stop: now())\n    |> filter(fn: (r) => r._measurement == \"tinygs_frame\")\n    |> filter(fn: (r) => r._field == \"confirmed\")\n    |> filter(fn: (r) => r._value == true)\n    |> filter(fn: (r) => exists r.satellite)\n,\n  from(bucket: \"tinygs_passive1\")\n    |> range(start: 0, stop: now())\n    |> filter(fn: (r) => r._measurement == \"tinygs_frame\")\n    |> filter(fn: (r) => r._field == \"confirmed\")\n    |> filter(fn: (r) => r._value == true)\n    |> filter(fn: (r) => exists r.satellite)])\n  |> map(fn: (r) => ({\n      _value: r._value,\n      sat_key: sat_key(name: r.satellite)\n    }))\n  |> filter(fn: (r) => r.sat_key != \"\")\n  |> group(columns: [\"sat_key\"])\n  |> limit(n: 1)\n  |> group()\n  |> count(column: \"_value\")\n  |> keep(columns: [\"_value\"])",
+          "refId": "A"
+        }
+      ],
+      "title": "unique satellites CONFIRMED (all-time)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "tinygs-influx"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "orange",
+            "mode": "fixed"
+          },
+          "decimals": 0,
+          "fieldMinMax": false,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 4,
+        "x": 8,
+        "y": 9
+      },
+      "id": 14,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.3.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "tinygs-influx"
+          },
+          "query": "from(bucket: \"tinygs_passive2\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"tinygs_frame\")\n  |> filter(fn: (r) => r._field == \"crc_error\")\n  |> filter(fn: (r) => r._value == true)\n  |> group()\n  |> count(column: \"_value\")\n  |> keep(columns: [\"_time\", \"_value\"])",
+          "refId": "A"
+        }
+      ],
+      "title": "crc_error messages",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "tinygs-influx"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "center",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": false,
+            "footer": {
+              "reducers": []
+            },
+            "inspect": false,
+            "minWidth": 300,
+            "wrapHeaderText": false,
+            "wrapText": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "percentage",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Packet Received"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeAsIso"
+              },
+              {
+                "id": "custom.width",
+                "value": 180
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Satellite"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Frequency"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "MHz"
+              },
+              {
+                "id": "decimals",
+                "value": 3
+              },
+              {
+                "id": "custom.width",
+                "value": 147
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Frequency Error"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "hertz"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 130
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "SNR"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dB"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "custom.width",
+                "value": 200
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "mode": "lcd",
+                  "type": "gauge",
+                  "valueDisplayMode": "value"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": 0
+                    },
+                    {
+                      "color": "yellow",
+                      "value": -15
+                    },
+                    {
+                      "color": "green",
+                      "value": -10
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "min",
+                "value": -20
+              },
+              {
+                "id": "max",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "RSSI"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dB"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "custom.width",
+                "value": 200
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "mode": "lcd",
+                  "type": "gauge",
+                  "valueDisplayMode": "value"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": 0
+                    },
+                    {
+                      "color": "yellow",
+                      "value": -130
+                    },
+                    {
+                      "color": "green",
+                      "value": -115
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "min",
+                "value": -150
+              },
+              {
+                "id": "max",
+                "value": -100
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Distance"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "km"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 200
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "mode": "lcd",
+                  "type": "gauge",
+                  "valueDisplayMode": "color"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": 0
+                    },
+                    {
+                      "color": "#EAB839",
+                      "value": 1000
+                    },
+                    {
+                      "color": "red",
+                      "value": 2000
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "min",
+                "value": 300
+              },
+              {
+                "id": "max",
+                "value": 3000
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Elevation"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "degree"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "custom.width",
+                "value": 187
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "mode": "lcd",
+                  "type": "gauge",
+                  "valueDisplayMode": "value"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": 0
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 10
+                    },
+                    {
+                      "color": "green",
+                      "value": 35
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 70
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "confirmed": {
+                        "color": "#73BF69",
+                        "index": 0,
+                        "text": "CONFIRMED"
+                      },
+                      "crc_error": {
+                        "color": "#FF9830",
+                        "index": 1,
+                        "text": "ERROR"
+                      },
+                      "error": {
+                        "color": "#FF9830",
+                        "index": 2,
+                        "text": "ERROR"
+                      },
+                      "unknown": {
+                        "color": "#8F9BA8",
+                        "index": 3,
+                        "text": "UNKNOWN"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "applyToRow": false,
+                  "mode": "basic",
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 145
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 12
+      },
+      "id": 12,
+      "options": {
+        "cellHeight": "sm",
+        "enablePagination": false,
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Packet Received"
+          }
+        ]
+      },
+      "pluginVersion": "12.3.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "tinygs-influx"
+          },
+          "query": "import \"strings\"\n\nframes = from(bucket: \"tinygs_passive2\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"tinygs_frame\")\n  |> filter(fn: (r) => exists r.satellite and exists r.decode_status)\n  |> filter(fn: (r) => r._field == \"slant_range_km\" or r._field == \"sat_el_deg\" or r._field == \"snr_db\" or r._field == \"freq_error_hz\" or r._field == \"rssi_db\")\n  |> group()\n  |> pivot(rowKey: [\"_time\", \"satellite\", \"decode_status\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({\n      _time: r._time,\n      satellite: r.satellite,\n      decode_status: r.decode_status,\n      sat_family: strings.split(v: r.satellite, t: \"-\")[0],\n      slant_range_km: r.slant_range_km,\n      sat_el_deg: r.sat_el_deg,\n      snr_db: r.snr_db,\n      freq_error_hz: r.freq_error_hz,\n      rssi_db: r.rssi_db\n    }))\n  |> keep(columns: [\"_time\", \"satellite\", \"decode_status\", \"sat_family\", \"slant_range_km\", \"sat_el_deg\", \"snr_db\", \"freq_error_hz\", \"rssi_db\"])\n\nfreq_exact = from(bucket: \"tinygs_passive2\")\n  |> range(start: -30d)\n  |> filter(fn: (r) => r._measurement == \"tinygs_state\")\n  |> filter(fn: (r) => r._field == \"freq\")\n  |> filter(fn: (r) => exists r.satellite)\n  |> group(columns: [\"satellite\"])\n  |> last()\n  |> keep(columns: [\"satellite\", \"_value\"])\n  |> rename(columns: {_value: \"frequency_mhz\"})\n\nfreq_family = from(bucket: \"tinygs_passive2\")\n  |> range(start: -30d)\n  |> filter(fn: (r) => r._measurement == \"tinygs_state\")\n  |> filter(fn: (r) => r._field == \"freq\")\n  |> filter(fn: (r) => exists r.satellite)\n  |> map(fn: (r) => ({\n      _time: r._time,\n      sat_family: strings.split(v: r.satellite, t: \"-\")[0],\n      _value: r._value\n    }))\n  |> group(columns: [\"sat_family\"])\n  |> sort(columns: [\"_time\"], desc: true)\n  |> limit(n: 1)\n  |> keep(columns: [\"sat_family\", \"_value\"])\n  |> rename(columns: {_value: \"frequency_mhz\"})\n\nexact = join(tables: {f: frames, s: freq_exact}, on: [\"satellite\"])\n  |> map(fn: (r) => ({\n      _time: r._time,\n      satellite: r.satellite,\n      decode_status: r.decode_status,\n      frequency_mhz: r.frequency_mhz,\n      freq_error_hz: r.freq_error_hz,\n      snr_db: r.snr_db,\n      rssi_db: r.rssi_db,\n      slant_range_km: r.slant_range_km,\n      sat_el_deg: r.sat_el_deg,\n      join_priority: 0.0\n    }))\n\nfamily = join(tables: {f: frames, s: freq_family}, on: [\"sat_family\"])\n  |> map(fn: (r) => ({\n      _time: r._time,\n      satellite: r.satellite,\n      decode_status: r.decode_status,\n      frequency_mhz: r.frequency_mhz,\n      freq_error_hz: r.freq_error_hz,\n      snr_db: r.snr_db,\n      rssi_db: r.rssi_db,\n      slant_range_km: r.slant_range_km,\n      sat_el_deg: r.sat_el_deg,\n      join_priority: 1.0\n    }))\n\nunion(tables: [exact, family])\n  |> group(columns: [\"_time\", \"satellite\", \"decode_status\"])\n  |> sort(columns: [\"join_priority\"], desc: false)\n  |> limit(n: 1)\n  |> keep(columns: [\"_time\", \"satellite\", \"decode_status\", \"frequency_mhz\", \"freq_error_hz\", \"snr_db\", \"rssi_db\", \"slant_range_km\", \"sat_el_deg\"])\n  |> rename(columns: {_time: \"Packet Received\", satellite: \"Satellite\", decode_status: \"Status\", frequency_mhz: \"Frequency\", freq_error_hz: \"Frequency Error\", snr_db: \"SNR\", rssi_db: \"RSSI\", slant_range_km: \"Distance\", sat_el_deg: \"Elevation\"})\n  |> keep(columns: [\"Packet Received\", \"Satellite\", \"Frequency\", \"Frequency Error\", \"SNR\", \"RSSI\", \"Distance\", \"Elevation\", \"Status\"])\n  |> group()\n  |> sort(columns: [\"Packet Received\"], desc: true)\n  |> limit(n: 200)",
+          "refId": "A"
+        }
+      ],
+      "title": "Received packets detail",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "indexByName": {
+              "Distance": 6,
+              "Elevation": 7,
+              "Frequency": 2,
+              "Frequency Error": 3,
+              "Packet Received": 0,
+              "RSSI": 5,
+              "SNR": 4,
+              "Satellite": 1,
+              "Status": 8
+            },
+            "renameByName": {}
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "tinygs-influx"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "decimals": 1,
+          "mappings": [],
+          "max": -5,
+          "min": -22,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "dB"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 6,
+        "x": 0,
+        "y": 24
+      },
+      "id": 3,
+      "options": {
+        "bucketSize": 1,
+        "combine": true,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "tinygs-influx"
+          },
+          "query": "from(bucket: \"tinygs_passive2\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"tinygs_frame\")\n  |> filter(fn: (r) => r._field == \"snr_db\")\n  |> filter(fn: (r) => r.decode_status == \"confirmed\")\n  |> keep(columns: [\"_time\", \"_value\"])\n  |> rename(columns: {_value: \"snr_db\"})",
+          "refId": "A"
+        }
+      ],
+      "title": "SNR histogram - CONFIRMED",
+      "type": "histogram"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "tinygs-influx"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "orange",
+            "mode": "fixed"
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "decimals": 1,
+          "mappings": [],
+          "max": -5,
+          "min": -22,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "dB"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 6,
+        "x": 6,
+        "y": 24
+      },
+      "id": 4,
+      "options": {
+        "bucketSize": 1,
+        "combine": true,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "tinygs-influx"
+          },
+          "query": "from(bucket: \"tinygs_passive2\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"tinygs_frame\")\n  |> filter(fn: (r) => r._field == \"snr_db\")\n  |> filter(fn: (r) => r.decode_status == \"crc_error\")\n  |> keep(columns: [\"_time\", \"_value\"])\n  |> rename(columns: {_value: \"snr_db\"})",
+          "refId": "A"
+        }
+      ],
+      "title": "SNR histogram - CRC ERROR",
+      "type": "histogram"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "tinygs-influx"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "decimals": 0,
+          "mappings": [],
+          "max": 25000,
+          "min": -10000,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "hertz"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 6,
+        "x": 12,
+        "y": 24
+      },
+      "id": 7,
+      "options": {
+        "bucketSize": 250,
+        "combine": true,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "tinygs-influx"
+          },
+          "query": "from(bucket: \"tinygs_passive2\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"tinygs_frame\")\n  |> filter(fn: (r) => r._field == \"freq_error_hz\")\n  |> filter(fn: (r) => r.decode_status == \"confirmed\")\n  |> keep(columns: [\"_time\", \"_value\"])\n  |> rename(columns: {_value: \"freq_error_hz\"})",
+          "refId": "A"
+        }
+      ],
+      "title": "Freq error histogram - CONFIRMED",
+      "type": "histogram"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "tinygs-influx"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "orange",
+            "mode": "fixed"
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "decimals": 0,
+          "mappings": [],
+          "max": 25000,
+          "min": -10000,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "hertz"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 6,
+        "x": 18,
+        "y": 24
+      },
+      "id": 8,
+      "options": {
+        "bucketSize": 250,
+        "combine": true,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "tinygs-influx"
+          },
+          "query": "from(bucket: \"tinygs_passive2\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"tinygs_frame\")\n  |> filter(fn: (r) => r._field == \"freq_error_hz\")\n  |> filter(fn: (r) => r.decode_status == \"crc_error\")\n  |> keep(columns: [\"_time\", \"_value\"])\n  |> rename(columns: {_value: \"freq_error_hz\"})",
+          "refId": "A"
+        }
+      ],
+      "title": "Freq error histogram - CRC ERROR",
+      "type": "histogram"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "tinygs-influx"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "decimals": 1,
+          "mappings": [],
+          "max": -100,
+          "min": -150,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "dB"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 6,
+        "x": 0,
+        "y": 33
+      },
+      "id": 5,
+      "options": {
+        "bucketSize": 1,
+        "combine": true,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "tinygs-influx"
+          },
+          "query": "from(bucket: \"tinygs_passive2\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"tinygs_frame\")\n  |> filter(fn: (r) => r._field == \"rssi_db\")\n  |> filter(fn: (r) => r.decode_status == \"confirmed\")\n  |> keep(columns: [\"_time\", \"_value\"])\n  |> rename(columns: {_value: \"rssi_db\"})",
+          "refId": "A"
+        }
+      ],
+      "title": "RSSI histogram - CONFIRMED",
+      "type": "histogram"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "tinygs-influx"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "orange",
+            "mode": "fixed"
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "decimals": 1,
+          "mappings": [],
+          "max": -100,
+          "min": -150,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "dB"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 6,
+        "x": 6,
+        "y": 33
+      },
+      "id": 6,
+      "options": {
+        "bucketSize": 1,
+        "combine": true,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "tinygs-influx"
+          },
+          "query": "from(bucket: \"tinygs_passive2\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"tinygs_frame\")\n  |> filter(fn: (r) => r._field == \"rssi_db\")\n  |> filter(fn: (r) => r.decode_status == \"crc_error\")\n  |> keep(columns: [\"_time\", \"_value\"])\n  |> rename(columns: {_value: \"rssi_db\"})",
+          "refId": "A"
+        }
+      ],
+      "title": "RSSI histogram - CRC ERROR",
+      "type": "histogram"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "tinygs-influx"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "footer": {
+              "reducers": []
+            },
+            "inspect": false
+          },
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 130
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Packets"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 33
+      },
+      "id": 18,
+      "options": {
+        "cellHeight": "sm",
+        "enablePagination": false,
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": false,
+            "displayName": "Status"
+          }
+        ]
+      },
+      "pluginVersion": "12.3.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "tinygs-influx"
+          },
+          "query": "import \"strings\"\n\nframes = from(bucket: \"tinygs_passive2\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"tinygs_frame\")\n  |> filter(fn: (r) => r._field == \"snr_db\" or r._field == \"rssi_db\" or r._field == \"freq_error_hz\")\n  |> filter(fn: (r) => exists r.satellite and exists r.decode_status)\n  |> filter(fn: (r) => r.decode_status == \"confirmed\" or r.decode_status == \"crc_error\")\n  |> group()\n  |> pivot(rowKey: [\"_time\", \"satellite\", \"decode_status\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> keep(columns: [\"_time\", \"satellite\", \"decode_status\", \"snr_db\", \"rssi_db\", \"freq_error_hz\"])\n  |> map(fn: (r) => ({\n      _time: r._time,\n      satellite: r.satellite,\n      decode_status: r.decode_status,\n      sat_family: strings.split(v: r.satellite, t: \"-\")[0],\n      snr_db: float(v: r.snr_db),\n      rssi_db: float(v: r.rssi_db),\n      abs_freq_error_hz: if float(v: r.freq_error_hz) < 0.0 then -1.0 * float(v: r.freq_error_hz) else float(v: r.freq_error_hz)\n    }))\n\nbw_exact = from(bucket: \"tinygs_passive2\")\n  |> range(start: -30d)\n  |> filter(fn: (r) => r._measurement == \"tinygs_state\")\n  |> filter(fn: (r) => r._field == \"bw\")\n  |> filter(fn: (r) => exists r.satellite)\n  |> group(columns: [\"satellite\"])\n  |> last()\n  |> keep(columns: [\"satellite\", \"_value\"])\n  |> rename(columns: {_value: \"bw_khz\"})\n\nbw_family = from(bucket: \"tinygs_passive2\")\n  |> range(start: -30d)\n  |> filter(fn: (r) => r._measurement == \"tinygs_state\")\n  |> filter(fn: (r) => r._field == \"bw\")\n  |> filter(fn: (r) => exists r.satellite)\n  |> map(fn: (r) => ({\n      _time: r._time,\n      sat_family: strings.split(v: r.satellite, t: \"-\")[0],\n      _value: r._value\n    }))\n  |> group(columns: [\"sat_family\"])\n  |> sort(columns: [\"_time\"], desc: true)\n  |> limit(n: 1)\n  |> keep(columns: [\"sat_family\", \"_value\"])\n  |> rename(columns: {_value: \"bw_khz_family\"})\n\nexact = join(tables: {f: frames, b: bw_exact}, on: [\"satellite\"])\n  |> map(fn: (r) => ({\n      _time: r._time,\n      satellite: r.satellite,\n      decode_status: r.decode_status,\n      snr_db: r.snr_db,\n      rssi_db: r.rssi_db,\n      abs_freq_error_hz: r.abs_freq_error_hz,\n      bw_khz: float(v: r.bw_khz),\n      join_priority: 0.0\n    }))\n\nfamily = join(tables: {f: frames, b: bw_family}, on: [\"sat_family\"])\n  |> map(fn: (r) => ({\n      _time: r._time,\n      satellite: r.satellite,\n      decode_status: r.decode_status,\n      snr_db: r.snr_db,\n      rssi_db: r.rssi_db,\n      abs_freq_error_hz: r.abs_freq_error_hz,\n      bw_khz: float(v: r.bw_khz_family),\n      join_priority: 1.0\n    }))\n\nfallback = frames\n  |> map(fn: (r) => ({\n      _time: r._time,\n      satellite: r.satellite,\n      decode_status: r.decode_status,\n      snr_db: r.snr_db,\n      rssi_db: r.rssi_db,\n      abs_freq_error_hz: r.abs_freq_error_hz,\n      bw_khz: 125.0,\n      join_priority: 2.0\n    }))\n\nbase = union(tables: [exact, family, fallback])\n  |> group(columns: [\"_time\", \"satellite\", \"decode_status\"])\n  |> sort(columns: [\"join_priority\"], desc: false)\n  |> limit(n: 1)\n  |> map(fn: (r) => ({\n      status: if r.decode_status == \"confirmed\" then \"CONFIRMED\" else \"CRC ERROR\",\n      snr_db: r.snr_db,\n      rssi_db: r.rssi_db,\n      abs_freq_error_hz: r.abs_freq_error_hz,\n      bw_khz: r.bw_khz,\n      freq_error_pct_bw: if r.bw_khz > 0.0 then (r.abs_freq_error_hz / (r.bw_khz * 1000.0)) * 100.0 else 0.0\n    }))\n\nby_status = base |> group(columns: [\"status\"])\nall_status = base\n  |> map(fn: (r) => ({\n      status: \"ALL\",\n      snr_db: r.snr_db,\n      rssi_db: r.rssi_db,\n      abs_freq_error_hz: r.abs_freq_error_hz,\n      bw_khz: r.bw_khz,\n      freq_error_pct_bw: r.freq_error_pct_bw\n    }))\n  |> group(columns: [\"status\"])\n\nstats_src = union(tables: [by_status, all_status])\n\ncount_by_status = stats_src\n  |> count(column: \"snr_db\")\n  |> keep(columns: [\"status\", \"snr_db\"])\n  |> rename(columns: {snr_db: \"Packets\"})\n\nsnr_mean = stats_src\n  |> mean(column: \"snr_db\")\n  |> keep(columns: [\"status\", \"snr_db\"])\n  |> rename(columns: {snr_db: \"SNR avg [dB]\"})\n\nsnr_median = stats_src\n  |> median(column: \"snr_db\")\n  |> keep(columns: [\"status\", \"snr_db\"])\n  |> rename(columns: {snr_db: \"SNR median [dB]\"})\n\nrssi_mean = stats_src\n  |> mean(column: \"rssi_db\")\n  |> keep(columns: [\"status\", \"rssi_db\"])\n  |> rename(columns: {rssi_db: \"RSSI avg [dB]\"})\n\nrssi_median = stats_src\n  |> median(column: \"rssi_db\")\n  |> keep(columns: [\"status\", \"rssi_db\"])\n  |> rename(columns: {rssi_db: \"RSSI median [dB]\"})\n\nferr_mean = stats_src\n  |> mean(column: \"abs_freq_error_hz\")\n  |> keep(columns: [\"status\", \"abs_freq_error_hz\"])\n  |> rename(columns: {abs_freq_error_hz: \"|Freq error| avg [Hz]\"})\n\nferr_median = stats_src\n  |> median(column: \"abs_freq_error_hz\")\n  |> keep(columns: [\"status\", \"abs_freq_error_hz\"])\n  |> rename(columns: {abs_freq_error_hz: \"|Freq error| median [Hz]\"})\n\nferr_pct_mean = stats_src\n  |> mean(column: \"freq_error_pct_bw\")\n  |> keep(columns: [\"status\", \"freq_error_pct_bw\"])\n  |> rename(columns: {freq_error_pct_bw: \"|Freq error| avg [% BW]\"})\n\nferr_pct_median = stats_src\n  |> median(column: \"freq_error_pct_bw\")\n  |> keep(columns: [\"status\", \"freq_error_pct_bw\"])\n  |> rename(columns: {freq_error_pct_bw: \"|Freq error| median [% BW]\"})\n\nbw_median = stats_src\n  |> median(column: \"bw_khz\")\n  |> keep(columns: [\"status\", \"bw_khz\"])\n  |> rename(columns: {bw_khz: \"BW median [kHz]\"})\n\njoin01 = join(tables: {a: count_by_status, b: snr_mean}, on: [\"status\"])\njoin02 = join(tables: {a: join01, b: snr_median}, on: [\"status\"])\njoin03 = join(tables: {a: join02, b: rssi_mean}, on: [\"status\"])\njoin04 = join(tables: {a: join03, b: rssi_median}, on: [\"status\"])\njoin05 = join(tables: {a: join04, b: ferr_mean}, on: [\"status\"])\njoin06 = join(tables: {a: join05, b: ferr_median}, on: [\"status\"])\njoin07 = join(tables: {a: join06, b: ferr_pct_mean}, on: [\"status\"])\njoin08 = join(tables: {a: join07, b: ferr_pct_median}, on: [\"status\"])\njoin09 = join(tables: {a: join08, b: bw_median}, on: [\"status\"])\n\njoin09\n  |> rename(columns: {status: \"Status\"})\n  |> keep(columns: [\"Status\", \"Packets\", \"SNR avg [dB]\", \"SNR median [dB]\", \"RSSI avg [dB]\", \"RSSI median [dB]\", \"|Freq error| avg [Hz]\", \"|Freq error| median [Hz]\", \"|Freq error| avg [% BW]\", \"|Freq error| median [% BW]\", \"BW median [kHz]\"])\n  |> group()\n  |> sort(columns: [\"Status\"], desc: false)",
+          "refId": "A"
+        }
+      ],
+      "title": "RX quality summary (avg/median)",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "indexByName": {
+              "BW median [kHz]": 10,
+              "Packets": 1,
+              "RSSI avg [dB]": 4,
+              "RSSI median [dB]": 5,
+              "SNR avg [dB]": 2,
+              "SNR median [dB]": 3,
+              "Status": 0,
+              "|Freq error| avg [% BW]": 8,
+              "|Freq error| avg [Hz]": 6,
+              "|Freq error| median [% BW]": 9,
+              "|Freq error| median [Hz]": 7
+            },
+            "renameByName": {}
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "tinygs-influx"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 20,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 2,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Median_SNR_dB"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dB"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 14,
+        "x": 0,
+        "y": 42
+      },
+      "id": 20,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "orientation": "auto",
+        "showValue": "never",
+        "stacking": "none",
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        },
+        "xField": "Elevation",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "pluginVersion": "12.3.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "tinygs-influx"
+          },
+          "query": "from(bucket: \"tinygs_passive2\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"tinygs_frame\")\n  |> filter(fn: (r) => r.decode_status == \"confirmed\")\n  |> filter(fn: (r) => r._field == \"sat_el_deg\" or r._field == \"snr_db\")\n  |> group()\n  |> pivot(rowKey: [\"_time\", \"satellite\", \"decode_status\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> filter(fn: (r) => exists r.sat_el_deg and exists r.snr_db)\n  |> filter(fn: (r) => r.sat_el_deg >= 0.0 and r.sat_el_deg <= 90.0)\n  |> map(fn: (r) => ({\n      el_bin_low: float(v: int(v: r.sat_el_deg / 5.0) * 5),\n      snr_db: float(v: r.snr_db)\n    }))\n  |> group(columns: [\"el_bin_low\"])\n  |> median(column: \"snr_db\")\n  |> keep(columns: [\"el_bin_low\", \"snr_db\"])\n  |> map(fn: (r) => ({\n      order: r.el_bin_low,\n      Elevation: string(v: int(v: r.el_bin_low)) + \"-\" + string(v: int(v: r.el_bin_low + 4.0)) + \"°\",\n      Median_SNR_dB: r.snr_db\n    }))\n  |> sort(columns: [\"order\"], desc: false)\n  |> keep(columns: [\"Elevation\", \"Median_SNR_dB\"])\n",
+          "refId": "A"
+        }
+      ],
+      "title": "SNR vs Elevation (CONFIRMED, median, 5° bins)",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "tinygs-influx"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 20,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 2,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Packets"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 10,
+        "x": 14,
+        "y": 42
+      },
+      "id": 21,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "orientation": "auto",
+        "showValue": "always",
+        "stacking": "none",
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        },
+        "xField": "Elevation",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "pluginVersion": "12.3.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "tinygs-influx"
+          },
+          "query": "from(bucket: \"tinygs_passive2\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"tinygs_frame\")\n  |> filter(fn: (r) => r.decode_status == \"confirmed\")\n  |> filter(fn: (r) => r._field == \"sat_el_deg\" or r._field == \"snr_db\")\n  |> group()\n  |> pivot(rowKey: [\"_time\", \"satellite\", \"decode_status\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> filter(fn: (r) => exists r.sat_el_deg and exists r.snr_db)\n  |> filter(fn: (r) => r.sat_el_deg >= 0.0 and r.sat_el_deg <= 90.0)\n  |> map(fn: (r) => ({\n      el_bin_low: float(v: int(v: r.sat_el_deg / 5.0) * 5),\n      one: 1.0\n    }))\n  |> group(columns: [\"el_bin_low\"])\n  |> sum(column: \"one\")\n  |> map(fn: (r) => ({\n      order: r.el_bin_low,\n      Elevation: string(v: int(v: r.el_bin_low)) + \"-\" + string(v: int(v: r.el_bin_low + 4.0)) + \"°\",\n      Packets: r.one\n    }))\n  |> sort(columns: [\"order\"], desc: false)\n  |> keep(columns: [\"Elevation\", \"Packets\"])\n",
+          "refId": "A"
+        }
+      ],
+      "title": "CONFIRMED packets by elevation (5° bins)",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "tinygs-influx"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 20,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 2,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Median_SNR_dB"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dB"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 14,
+        "x": 0,
+        "y": 52
+      },
+      "id": 22,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "orientation": "auto",
+        "showValue": "never",
+        "stacking": "none",
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        },
+        "xField": "Distance",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 100
+      },
+      "pluginVersion": "12.3.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "tinygs-influx"
+          },
+          "query": "from(bucket: \"tinygs_passive2\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"tinygs_frame\")\n  |> filter(fn: (r) => r.decode_status == \"confirmed\")\n  |> filter(fn: (r) => r._field == \"slant_range_km\" or r._field == \"snr_db\")\n  |> group()\n  |> pivot(rowKey: [\"_time\", \"satellite\", \"decode_status\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> filter(fn: (r) => exists r.slant_range_km and exists r.snr_db)\n  |> filter(fn: (r) => r.slant_range_km >= 0.0)\n  |> map(fn: (r) => ({\n      dist_bin_low: float(v: int(v: r.slant_range_km / 100.0) * 100),\n      snr_db: float(v: r.snr_db)\n    }))\n  |> group(columns: [\"dist_bin_low\"])\n  |> median(column: \"snr_db\")\n  |> keep(columns: [\"dist_bin_low\", \"snr_db\"])\n  |> map(fn: (r) => ({\n      order: r.dist_bin_low,\n      Distance: string(v: int(v: r.dist_bin_low)) + \"-\" + string(v: int(v: r.dist_bin_low + 99.0)) + \" km\",\n      Median_SNR_dB: r.snr_db\n    }))\n  |> sort(columns: [\"order\"], desc: false)\n  |> keep(columns: [\"Distance\", \"Median_SNR_dB\"])\n",
+          "refId": "A"
+        }
+      ],
+      "title": "SNR vs Distance (CONFIRMED, 100 km bins)",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "tinygs-influx"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 20,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 2,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Packets"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 10,
+        "x": 14,
+        "y": 52
+      },
+      "id": 23,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "orientation": "auto",
+        "showValue": "always",
+        "stacking": "none",
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        },
+        "xField": "Distance",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 100
+      },
+      "pluginVersion": "12.3.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "tinygs-influx"
+          },
+          "query": "from(bucket: \"tinygs_passive2\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"tinygs_frame\")\n  |> filter(fn: (r) => r.decode_status == \"confirmed\")\n  |> filter(fn: (r) => r._field == \"slant_range_km\" or r._field == \"snr_db\")\n  |> group()\n  |> pivot(rowKey: [\"_time\", \"satellite\", \"decode_status\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> filter(fn: (r) => exists r.slant_range_km and exists r.snr_db)\n  |> filter(fn: (r) => r.slant_range_km >= 0.0)\n  |> map(fn: (r) => ({\n      dist_bin_low: float(v: int(v: r.slant_range_km / 100.0) * 100),\n      one: 1.0\n    }))\n  |> group(columns: [\"dist_bin_low\"])\n  |> sum(column: \"one\")\n  |> map(fn: (r) => ({\n      order: r.dist_bin_low,\n      Distance: string(v: int(v: r.dist_bin_low)) + \"-\" + string(v: int(v: r.dist_bin_low + 99.0)) + \" km\",\n      Packets: r.one\n    }))\n  |> sort(columns: [\"order\"], desc: false)\n  |> keep(columns: [\"Distance\", \"Packets\"])\n",
+          "refId": "A"
+        }
+      ],
+      "title": "CONFIRMED packets by distance (100 km bins)",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "tinygs-influx"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "axisSoftMax": -140,
+            "axisSoftMin": -100,
+            "fillOpacity": 20,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 2,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Median_RSSI_dB"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dB"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 14,
+        "x": 0,
+        "y": 62
+      },
+      "id": 24,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "orientation": "auto",
+        "showValue": "never",
+        "stacking": "none",
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        },
+        "xField": "Elevation",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "pluginVersion": "12.3.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "tinygs-influx"
+          },
+          "query": "from(bucket: \"tinygs_passive2\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"tinygs_frame\")\n  |> filter(fn: (r) => r.decode_status == \"confirmed\")\n  |> filter(fn: (r) => r._field == \"sat_el_deg\" or r._field == \"rssi_db\")\n  |> group()\n  |> pivot(rowKey: [\"_time\", \"satellite\", \"decode_status\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> filter(fn: (r) => exists r.sat_el_deg and exists r.rssi_db)\n  |> filter(fn: (r) => r.sat_el_deg >= 0.0 and r.sat_el_deg <= 90.0)\n  |> map(fn: (r) => ({\n      el_bin_low: float(v: int(v: r.sat_el_deg / 5.0) * 5),\n      rssi_db: float(v: r.rssi_db)\n    }))\n  |> group(columns: [\"el_bin_low\"])\n  |> median(column: \"rssi_db\")\n  |> keep(columns: [\"el_bin_low\", \"rssi_db\"])\n  |> map(fn: (r) => ({\n      order: r.el_bin_low,\n      Elevation: string(v: int(v: r.el_bin_low)) + \"-\" + string(v: int(v: r.el_bin_low + 4.0)) + \"°\",\n      Median_RSSI_dB: r.rssi_db\n    }))\n  |> sort(columns: [\"order\"], desc: false)\n  |> keep(columns: [\"Elevation\", \"Median_RSSI_dB\"])\n",
+          "refId": "A"
+        }
+      ],
+      "title": "RSSI vs Elevation (CONFIRMED, median, 5° bins)",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "tinygs-influx"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "footer": {
+              "reducers": []
+            },
+            "inspect": false
+          },
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Band"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 130
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "CONFIRMED"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 95
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "NOT_CONFIRMED"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 120
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Total"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Success_pct"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 120
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 10,
+        "x": 14,
+        "y": 62
+      },
+      "id": 19,
+      "options": {
+        "cellHeight": "sm",
+        "enablePagination": false,
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": false,
+            "displayName": "Band"
+          }
+        ]
+      },
+      "pluginVersion": "12.3.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "tinygs-influx"
+          },
+          "query": "own_bucket = \"tinygs_passive2\"\nnorad_key = (s) => \"NORAD:\" + string(v: int(v: float(v: s)))\n\nshared_state = union(tables: [\n  from(bucket: \"tinygs_active\")\n    |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n    |> filter(fn: (r) => r._measurement == \"tinygs_state\")\n    |> filter(fn: (r) => r._field == \"state_seen\" or r._field == \"freq\")\n    |> filter(fn: (r) => exists r.tracked_norad)\n    |> pivot(rowKey: [\"_time\", \"tracked_norad\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n    |> filter(fn: (r) => exists r.state_seen and exists r.freq)\n    |> filter(fn: (r) => r.state_seen == true)\n    |> map(fn: (r) => ({\n        _time: r._time,\n        norad_key: norad_key(s: r.tracked_norad),\n        freq_mhz: float(v: r.freq)\n      }))\n    |> keep(columns: [\"_time\", \"norad_key\", \"freq_mhz\"]),\n  from(bucket: \"tinygs_passive2\")\n    |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n    |> filter(fn: (r) => r._measurement == \"tinygs_state\")\n    |> filter(fn: (r) => r._field == \"state_seen\" or r._field == \"freq\")\n    |> filter(fn: (r) => exists r.tracked_norad)\n    |> pivot(rowKey: [\"_time\", \"tracked_norad\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n    |> filter(fn: (r) => exists r.state_seen and exists r.freq)\n    |> filter(fn: (r) => r.state_seen == true)\n    |> map(fn: (r) => ({\n        _time: r._time,\n        norad_key: norad_key(s: r.tracked_norad),\n        freq_mhz: float(v: r.freq)\n      }))\n    |> keep(columns: [\"_time\", \"norad_key\", \"freq_mhz\"])\n,\n  from(bucket: \"tinygs_passive1\")\n    |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n    |> filter(fn: (r) => r._measurement == \"tinygs_state\")\n    |> filter(fn: (r) => r._field == \"state_seen\" or r._field == \"freq\")\n    |> filter(fn: (r) => exists r.tracked_norad)\n    |> pivot(rowKey: [\"_time\", \"tracked_norad\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n    |> filter(fn: (r) => exists r.state_seen and exists r.freq)\n    |> filter(fn: (r) => r.state_seen == true)\n    |> map(fn: (r) => ({\n        _time: r._time,\n        norad_key: norad_key(s: r.tracked_norad),\n        freq_mhz: float(v: r.freq)\n      }))\n    |> keep(columns: [\"_time\", \"norad_key\", \"freq_mhz\"])])\n  |> group(columns: [\"norad_key\"])\n  |> sort(columns: [\"_time\"], desc: false)\n\nown_confirmed = from(bucket: own_bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"tinygs_frame\")\n  |> filter(fn: (r) => r.decode_status == \"confirmed\")\n  |> filter(fn: (r) => r._field == \"confirmed\")\n  |> filter(fn: (r) => r._value == true)\n  |> filter(fn: (r) => exists r.tracked_norad)\n  |> map(fn: (r) => ({\n      _time: r._time,\n      norad_key: norad_key(s: r.tracked_norad)\n    }))\n  |> keep(columns: [\"_time\", \"norad_key\"])\n\nstate_first = shared_state\n  |> first(column: \"freq_mhz\")\n  |> map(fn: (r) => ({\n      _time: r._time,\n      norad_key: r.norad_key,\n      freq_mhz: r.freq_mhz,\n      new_pass: 0.0,\n      source: \"state\"\n    }))\n\nstate_other = shared_state\n  |> elapsed(unit: 1s)\n  |> rename(columns: {elapsed: \"elapsed_s\"})\n  |> map(fn: (r) => ({\n      _time: r._time,\n      norad_key: r.norad_key,\n      freq_mhz: r.freq_mhz,\n      new_pass: if float(v: r.elapsed_s) > 900.0 then 1.0 else 0.0,\n      source: \"state\"\n    }))\n\nstate_rows = union(tables: [state_first, state_other])\n\nshared_timeline = state_rows\n  |> group(columns: [\"norad_key\"])\n  |> sort(columns: [\"_time\"], desc: false)\n  |> cumulativeSum(columns: [\"new_pass\"])\n  |> map(fn: (r) => ({\n      norad_key: r.norad_key,\n      pass_id: string(v: int(v: r.new_pass)),\n      freq_mhz: r.freq_mhz,\n      source: r.source\n    }))\n\nown_confirmed_rows = own_confirmed\n  |> map(fn: (r) => ({\n      _time: r._time,\n      norad_key: r.norad_key,\n      freq_mhz: -1.0,\n      new_pass: 0.0,\n      source: \"confirmed_own\"\n    }))\n\nown_timeline = union(tables: [state_rows, own_confirmed_rows])\n  |> group(columns: [\"norad_key\"])\n  |> sort(columns: [\"_time\"], desc: false)\n  |> cumulativeSum(columns: [\"new_pass\"])\n  |> map(fn: (r) => ({\n      norad_key: r.norad_key,\n      pass_id: string(v: int(v: r.new_pass)),\n      freq_mhz: r.freq_mhz,\n      source: r.source\n    }))\n\npass_band = shared_timeline\n  |> filter(fn: (r) => r.source == \"state\")\n  |> group(columns: [\"norad_key\", \"pass_id\"])\n  |> last(column: \"freq_mhz\")\n  |> keep(columns: [\"norad_key\", \"pass_id\", \"freq_mhz\"])\n  |> map(fn: (r) => ({\n      norad_key: r.norad_key,\n      pass_id: r.pass_id,\n      Band: string(v: int(v: float(v: r.freq_mhz) / 10.0) * 10) + \"-\" + string(v: int(v: float(v: r.freq_mhz) / 10.0) * 10 + 9) + \" MHz\"\n    }))\n\nown_status0 = pass_band\n  |> map(fn: (r) => ({norad_key: r.norad_key, pass_id: r.pass_id, has_confirmed_own: 0.0}))\n\nown_status_hit = own_timeline\n  |> filter(fn: (r) => r.source == \"confirmed_own\")\n  |> group(columns: [\"norad_key\", \"pass_id\"])\n  |> first(column: \"source\")\n  |> keep(columns: [\"norad_key\", \"pass_id\"])\n  |> map(fn: (r) => ({norad_key: r.norad_key, pass_id: r.pass_id, has_confirmed_own: 1.0}))\n\nown_status = union(tables: [own_status0, own_status_hit])\n  |> group(columns: [\"norad_key\", \"pass_id\"])\n  |> max(column: \"has_confirmed_own\")\n\njoin(tables: {b: pass_band, o: own_status}, on: [\"norad_key\", \"pass_id\"])\n  |> map(fn: (r) => ({\n      Band: r.Band,\n      CONFIRMED: if r.has_confirmed_own > 0.0 then 1.0 else 0.0,\n      NOT_CONFIRMED: if r.has_confirmed_own > 0.0 then 0.0 else 1.0\n    }))\n  |> group(columns: [\"Band\"])\n  |> reduce(\n      identity: {CONFIRMED: 0.0, NOT_CONFIRMED: 0.0},\n      fn: (r, accumulator) => ({\n        CONFIRMED: accumulator.CONFIRMED + r.CONFIRMED,\n        NOT_CONFIRMED: accumulator.NOT_CONFIRMED + r.NOT_CONFIRMED\n      })\n    )\n  |> map(fn: (r) => ({\n      Band: r.Band,\n      CONFIRMED: r.CONFIRMED,\n      NOT_CONFIRMED: r.NOT_CONFIRMED,\n      Total: r.CONFIRMED + r.NOT_CONFIRMED,\n      Success_pct: if (r.CONFIRMED + r.NOT_CONFIRMED) > 0.0 then (r.CONFIRMED / (r.CONFIRMED + r.NOT_CONFIRMED)) * 100.0 else 0.0\n    }))\n  |> keep(columns: [\"Band\", \"CONFIRMED\", \"NOT_CONFIRMED\", \"Total\", \"Success_pct\"])\n  |> group()\n  |> sort(columns: [\"Band\"], desc: false)\n",
+          "refId": "A"
+        }
+      ],
+      "title": "Success by frequency band",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "indexByName": {
+              "Band": 0,
+              "CONFIRMED": 1,
+              "NOT_CONFIRMED": 2,
+              "Success_pct": 4,
+              "Total": 3
+            },
+            "renameByName": {
+              "NOT_CONFIRMED": "NOT CONFIRMED",
+              "Success_pct": "Success [%]"
+            }
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "tinygs-influx"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "axisSoftMax": 100,
+            "fillOpacity": 20,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 2,
+            "scaleDistribution": {
+              "linearThreshold": 0,
+              "log": 2,
+              "type": "log"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "fieldMinMax": false,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "CONFIRMED"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "NOT_CONFIRMED"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "gray",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 25,
+        "w": 10,
+        "x": 14,
+        "y": 67
+      },
+      "id": 30,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "orientation": "vertical",
+        "showValue": "always",
+        "stacking": "none",
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        },
+        "xField": "Max_elevation_bin",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "pluginVersion": "12.3.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "tinygs-influx"
+          },
+          "query": "own_bucket = \"tinygs_passive2\"\nnorad_id = (s) => string(v: int(v: float(v: s)))\npass_sec = (s) => int(v: if s >= 0.0 then s + 0.5 else s - 0.5)\npass_key = (norad, aos_s, los_s) => norad + \"|\" + string(v: pass_sec(s: aos_s)) + \"|\" + string(v: pass_sec(s: los_s))\n\nstate_passes = union(tables: [\n  from(bucket: \"tinygs_active\")\n    |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n    |> filter(fn: (r) => r._measurement == \"tinygs_state\")\n    |> filter(fn: (r) => r._field == \"tle_pass_max_el_deg\" or r._field == \"tle_pass_aos_unix_s\" or r._field == \"tle_pass_los_unix_s\")\n    |> filter(fn: (r) => exists r.tracked_norad)\n    |> pivot(rowKey: [\"_time\", \"tracked_norad\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n    |> filter(fn: (r) => exists r.tle_pass_max_el_deg and exists r.tle_pass_aos_unix_s and exists r.tle_pass_los_unix_s)\n    |> map(fn: (r) => ({\n        norad_id: norad_id(s: r.tracked_norad),\n        pass_key: pass_key(\n          norad: norad_id(s: r.tracked_norad),\n          aos_s: float(v: r.tle_pass_aos_unix_s),\n          los_s: float(v: r.tle_pass_los_unix_s)\n        ),\n        max_el_deg: float(v: r.tle_pass_max_el_deg),\n        pass_aos_s: float(v: r.tle_pass_aos_unix_s),\n        pass_los_s: float(v: r.tle_pass_los_unix_s)\n      }))\n    |> filter(fn: (r) => r.max_el_deg >= 0.0 and r.max_el_deg <= 90.0 and r.pass_los_s >= r.pass_aos_s),\n  from(bucket: \"tinygs_passive2\")\n    |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n    |> filter(fn: (r) => r._measurement == \"tinygs_state\")\n    |> filter(fn: (r) => r._field == \"tle_pass_max_el_deg\" or r._field == \"tle_pass_aos_unix_s\" or r._field == \"tle_pass_los_unix_s\")\n    |> filter(fn: (r) => exists r.tracked_norad)\n    |> pivot(rowKey: [\"_time\", \"tracked_norad\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n    |> filter(fn: (r) => exists r.tle_pass_max_el_deg and exists r.tle_pass_aos_unix_s and exists r.tle_pass_los_unix_s)\n    |> map(fn: (r) => ({\n        norad_id: norad_id(s: r.tracked_norad),\n        pass_key: pass_key(\n          norad: norad_id(s: r.tracked_norad),\n          aos_s: float(v: r.tle_pass_aos_unix_s),\n          los_s: float(v: r.tle_pass_los_unix_s)\n        ),\n        max_el_deg: float(v: r.tle_pass_max_el_deg),\n        pass_aos_s: float(v: r.tle_pass_aos_unix_s),\n        pass_los_s: float(v: r.tle_pass_los_unix_s)\n      }))\n    |> filter(fn: (r) => r.max_el_deg >= 0.0 and r.max_el_deg <= 90.0 and r.pass_los_s >= r.pass_aos_s)\n,\n  from(bucket: \"tinygs_passive1\")\n    |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n    |> filter(fn: (r) => r._measurement == \"tinygs_state\")\n    |> filter(fn: (r) => r._field == \"tle_pass_max_el_deg\" or r._field == \"tle_pass_aos_unix_s\" or r._field == \"tle_pass_los_unix_s\")\n    |> filter(fn: (r) => exists r.tracked_norad)\n    |> pivot(rowKey: [\"_time\", \"tracked_norad\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n    |> filter(fn: (r) => exists r.tle_pass_max_el_deg and exists r.tle_pass_aos_unix_s and exists r.tle_pass_los_unix_s)\n    |> map(fn: (r) => ({\n        norad_id: norad_id(s: r.tracked_norad),\n        pass_key: pass_key(\n          norad: norad_id(s: r.tracked_norad),\n          aos_s: float(v: r.tle_pass_aos_unix_s),\n          los_s: float(v: r.tle_pass_los_unix_s)\n        ),\n        max_el_deg: float(v: r.tle_pass_max_el_deg),\n        pass_aos_s: float(v: r.tle_pass_aos_unix_s),\n        pass_los_s: float(v: r.tle_pass_los_unix_s)\n      }))\n    |> filter(fn: (r) => r.max_el_deg >= 0.0 and r.max_el_deg <= 90.0 and r.pass_los_s >= r.pass_aos_s)])\n  |> group(columns: [\"norad_id\", \"pass_key\"])\n  |> max(column: \"max_el_deg\")\n  |> keep(columns: [\"norad_id\", \"pass_key\", \"max_el_deg\"])\n\nconfirmed_passes = from(bucket: own_bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"tinygs_frame\")\n  |> filter(fn: (r) => r.decode_status == \"confirmed\")\n  |> filter(fn: (r) => r._field == \"tle_pass_aos_unix_s\" or r._field == \"tle_pass_los_unix_s\")\n  |> filter(fn: (r) => exists r.tracked_norad)\n  |> pivot(rowKey: [\"_time\", \"tracked_norad\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> filter(fn: (r) => exists r.tle_pass_aos_unix_s and exists r.tle_pass_los_unix_s)\n  |> map(fn: (r) => ({\n      norad_id: norad_id(s: r.tracked_norad),\n      pass_key: pass_key(\n        norad: norad_id(s: r.tracked_norad),\n        aos_s: float(v: r.tle_pass_aos_unix_s),\n        los_s: float(v: r.tle_pass_los_unix_s)\n      ),\n      has_confirmed: 1.0\n    }))\n  |> group(columns: [\"norad_id\", \"pass_key\"])\n  |> max(column: \"has_confirmed\")\n\npass_status0 = state_passes\n  |> map(fn: (r) => ({norad_id: r.norad_id, pass_key: r.pass_key, has_confirmed: 0.0}))\n\npass_status = union(tables: [pass_status0, confirmed_passes])\n  |> group(columns: [\"norad_id\", \"pass_key\"])\n  |> max(column: \"has_confirmed\")\n\npass_labeled = join(tables: {p: state_passes, s: pass_status}, on: [\"norad_id\", \"pass_key\"])\n  |> map(fn: (r) => ({\n      max_el_deg: r.max_el_deg,\n      CONFIRMED: if r.has_confirmed > 0.0 then 1.0 else 0.0,\n      NOT_CONFIRMED: if r.has_confirmed > 0.0 then 0.0 else 1.0\n    }))\n  |> map(fn: (r) => ({\n      bin_low: float(v: int(v: r.max_el_deg / 10.0) * 10),\n      CONFIRMED: r.CONFIRMED,\n      NOT_CONFIRMED: r.NOT_CONFIRMED\n    }))\n\npass_labeled\n  |> group(columns: [\"bin_low\"])\n  |> reduce(\n      identity: {CONFIRMED: 0.0, NOT_CONFIRMED: 0.0},\n      fn: (r, accumulator) => ({\n        CONFIRMED: accumulator.CONFIRMED + r.CONFIRMED,\n        NOT_CONFIRMED: accumulator.NOT_CONFIRMED + r.NOT_CONFIRMED\n      })\n    )\n  |> map(fn: (r) => ({\n      order: r.bin_low,\n      Max_elevation_bin: string(v: int(v: r.bin_low)) + \"-\" + string(v: int(v: r.bin_low + 9.0)) + \"°\",\n      CONFIRMED: r.CONFIRMED,\n      NOT_CONFIRMED: r.NOT_CONFIRMED\n    }))\n  |> sort(columns: [\"order\"], desc: false)\n  |> keep(columns: [\"Max_elevation_bin\", \"CONFIRMED\", \"NOT_CONFIRMED\"])\n",
+          "refId": "A"
+        }
+      ],
+      "title": "Passes by max elevation bin (begine, frame-preferred elevation)",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "tinygs-influx"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "axisSoftMax": -140,
+            "axisSoftMin": -100,
+            "fillOpacity": 20,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 2,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Median_RSSI_dB"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dB"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 14,
+        "x": 0,
+        "y": 72
+      },
+      "id": 26,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "orientation": "auto",
+        "showValue": "never",
+        "stacking": "none",
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        },
+        "xField": "Distance",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 100
+      },
+      "pluginVersion": "12.3.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "tinygs-influx"
+          },
+          "query": "from(bucket: \"tinygs_passive2\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"tinygs_frame\")\n  |> filter(fn: (r) => r.decode_status == \"confirmed\")\n  |> filter(fn: (r) => r._field == \"slant_range_km\" or r._field == \"rssi_db\")\n  |> group()\n  |> pivot(rowKey: [\"_time\", \"satellite\", \"decode_status\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> filter(fn: (r) => exists r.slant_range_km and exists r.rssi_db)\n  |> filter(fn: (r) => r.slant_range_km >= 0.0)\n  |> map(fn: (r) => ({\n      dist_bin_low: float(v: int(v: r.slant_range_km / 100.0) * 100),\n      rssi_db: float(v: r.rssi_db)\n    }))\n  |> group(columns: [\"dist_bin_low\"])\n  |> median(column: \"rssi_db\")\n  |> keep(columns: [\"dist_bin_low\", \"rssi_db\"])\n  |> map(fn: (r) => ({\n      order: r.dist_bin_low,\n      Distance: string(v: int(v: r.dist_bin_low)) + \"-\" + string(v: int(v: r.dist_bin_low + 99.0)) + \" km\",\n      Median_RSSI_dB: r.rssi_db\n    }))\n  |> sort(columns: [\"order\"], desc: false)\n  |> keep(columns: [\"Distance\", \"Median_RSSI_dB\"])\n",
+          "refId": "A"
+        }
+      ],
+      "title": "RSSI vs Distance (CONFIRMED, 100 km bins)",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "tinygs-influx"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 20,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 2,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "orange",
+                "value": 50
+              },
+              {
+                "color": "green",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Confirmed_probability_pct"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 100
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 14,
+        "x": 0,
+        "y": 82
+      },
+      "id": 31,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "orientation": "auto",
+        "showValue": "always",
+        "stacking": "none",
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        },
+        "xField": "Max_elevation_bin",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "pluginVersion": "12.3.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "tinygs-influx"
+          },
+          "query": "own_bucket = \"tinygs_passive2\"\nnorad_id = (s) => string(v: int(v: float(v: s)))\npass_sec = (s) => int(v: if s >= 0.0 then s + 0.5 else s - 0.5)\npass_key = (norad, aos_s, los_s) => norad + \"|\" + string(v: pass_sec(s: aos_s)) + \"|\" + string(v: pass_sec(s: los_s))\n\nstate_passes = union(tables: [\n  from(bucket: \"tinygs_active\")\n    |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n    |> filter(fn: (r) => r._measurement == \"tinygs_state\")\n    |> filter(fn: (r) => r._field == \"tle_pass_max_el_deg\" or r._field == \"tle_pass_aos_unix_s\" or r._field == \"tle_pass_los_unix_s\")\n    |> filter(fn: (r) => exists r.tracked_norad)\n    |> pivot(rowKey: [\"_time\", \"tracked_norad\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n    |> filter(fn: (r) => exists r.tle_pass_max_el_deg and exists r.tle_pass_aos_unix_s and exists r.tle_pass_los_unix_s)\n    |> map(fn: (r) => ({\n        norad_id: norad_id(s: r.tracked_norad),\n        pass_key: pass_key(\n          norad: norad_id(s: r.tracked_norad),\n          aos_s: float(v: r.tle_pass_aos_unix_s),\n          los_s: float(v: r.tle_pass_los_unix_s)\n        ),\n        max_el_deg: float(v: r.tle_pass_max_el_deg),\n        pass_aos_s: float(v: r.tle_pass_aos_unix_s),\n        pass_los_s: float(v: r.tle_pass_los_unix_s)\n      }))\n    |> filter(fn: (r) => r.max_el_deg >= 0.0 and r.max_el_deg <= 90.0 and r.pass_los_s >= r.pass_aos_s),\n  from(bucket: \"tinygs_passive2\")\n    |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n    |> filter(fn: (r) => r._measurement == \"tinygs_state\")\n    |> filter(fn: (r) => r._field == \"tle_pass_max_el_deg\" or r._field == \"tle_pass_aos_unix_s\" or r._field == \"tle_pass_los_unix_s\")\n    |> filter(fn: (r) => exists r.tracked_norad)\n    |> pivot(rowKey: [\"_time\", \"tracked_norad\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n    |> filter(fn: (r) => exists r.tle_pass_max_el_deg and exists r.tle_pass_aos_unix_s and exists r.tle_pass_los_unix_s)\n    |> map(fn: (r) => ({\n        norad_id: norad_id(s: r.tracked_norad),\n        pass_key: pass_key(\n          norad: norad_id(s: r.tracked_norad),\n          aos_s: float(v: r.tle_pass_aos_unix_s),\n          los_s: float(v: r.tle_pass_los_unix_s)\n        ),\n        max_el_deg: float(v: r.tle_pass_max_el_deg),\n        pass_aos_s: float(v: r.tle_pass_aos_unix_s),\n        pass_los_s: float(v: r.tle_pass_los_unix_s)\n      }))\n    |> filter(fn: (r) => r.max_el_deg >= 0.0 and r.max_el_deg <= 90.0 and r.pass_los_s >= r.pass_aos_s)\n,\n  from(bucket: \"tinygs_passive1\")\n    |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n    |> filter(fn: (r) => r._measurement == \"tinygs_state\")\n    |> filter(fn: (r) => r._field == \"tle_pass_max_el_deg\" or r._field == \"tle_pass_aos_unix_s\" or r._field == \"tle_pass_los_unix_s\")\n    |> filter(fn: (r) => exists r.tracked_norad)\n    |> pivot(rowKey: [\"_time\", \"tracked_norad\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n    |> filter(fn: (r) => exists r.tle_pass_max_el_deg and exists r.tle_pass_aos_unix_s and exists r.tle_pass_los_unix_s)\n    |> map(fn: (r) => ({\n        norad_id: norad_id(s: r.tracked_norad),\n        pass_key: pass_key(\n          norad: norad_id(s: r.tracked_norad),\n          aos_s: float(v: r.tle_pass_aos_unix_s),\n          los_s: float(v: r.tle_pass_los_unix_s)\n        ),\n        max_el_deg: float(v: r.tle_pass_max_el_deg),\n        pass_aos_s: float(v: r.tle_pass_aos_unix_s),\n        pass_los_s: float(v: r.tle_pass_los_unix_s)\n      }))\n    |> filter(fn: (r) => r.max_el_deg >= 0.0 and r.max_el_deg <= 90.0 and r.pass_los_s >= r.pass_aos_s)])\n  |> group(columns: [\"norad_id\", \"pass_key\"])\n  |> max(column: \"max_el_deg\")\n  |> keep(columns: [\"norad_id\", \"pass_key\", \"max_el_deg\"])\n\nconfirmed_passes = from(bucket: own_bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"tinygs_frame\")\n  |> filter(fn: (r) => r.decode_status == \"confirmed\")\n  |> filter(fn: (r) => r._field == \"tle_pass_aos_unix_s\" or r._field == \"tle_pass_los_unix_s\")\n  |> filter(fn: (r) => exists r.tracked_norad)\n  |> pivot(rowKey: [\"_time\", \"tracked_norad\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> filter(fn: (r) => exists r.tle_pass_aos_unix_s and exists r.tle_pass_los_unix_s)\n  |> map(fn: (r) => ({\n      norad_id: norad_id(s: r.tracked_norad),\n      pass_key: pass_key(\n        norad: norad_id(s: r.tracked_norad),\n        aos_s: float(v: r.tle_pass_aos_unix_s),\n        los_s: float(v: r.tle_pass_los_unix_s)\n      ),\n      has_confirmed: 1.0\n    }))\n  |> group(columns: [\"norad_id\", \"pass_key\"])\n  |> max(column: \"has_confirmed\")\n\npass_status0 = state_passes\n  |> map(fn: (r) => ({norad_id: r.norad_id, pass_key: r.pass_key, has_confirmed: 0.0}))\n\npass_status = union(tables: [pass_status0, confirmed_passes])\n  |> group(columns: [\"norad_id\", \"pass_key\"])\n  |> max(column: \"has_confirmed\")\n\npass_labeled = join(tables: {p: state_passes, s: pass_status}, on: [\"norad_id\", \"pass_key\"])\n  |> map(fn: (r) => ({\n      max_el_deg: r.max_el_deg,\n      CONFIRMED: if r.has_confirmed > 0.0 then 1.0 else 0.0,\n      NOT_CONFIRMED: if r.has_confirmed > 0.0 then 0.0 else 1.0\n    }))\n  |> map(fn: (r) => ({\n      bin_low: float(v: int(v: r.max_el_deg / 10.0) * 10),\n      CONFIRMED: r.CONFIRMED,\n      NOT_CONFIRMED: r.NOT_CONFIRMED\n    }))\n\npass_labeled\n  |> group(columns: [\"bin_low\"])\n  |> reduce(\n      identity: {CONFIRMED: 0.0, NOT_CONFIRMED: 0.0},\n      fn: (r, accumulator) => ({\n        CONFIRMED: accumulator.CONFIRMED + r.CONFIRMED,\n        NOT_CONFIRMED: accumulator.NOT_CONFIRMED + r.NOT_CONFIRMED\n      })\n    )\n  |> map(fn: (r) => ({\n      order: r.bin_low,\n      Max_elevation_bin: string(v: int(v: r.bin_low)) + \"-\" + string(v: int(v: r.bin_low + 9.0)) + \"°\",\n      Confirmed_probability_pct: if (r.CONFIRMED + r.NOT_CONFIRMED) > 0.0 then (r.CONFIRMED / (r.CONFIRMED + r.NOT_CONFIRMED)) * 100.0 else 0.0\n    }))\n  |> sort(columns: [\"order\"], desc: false)\n  |> keep(columns: [\"Max_elevation_bin\", \"Confirmed_probability_pct\"])\n",
+          "refId": "A"
+        }
+      ],
+      "title": "Confirmed Reception Probability by Max Pass Elevation",
+      "type": "barchart"
+    }
+  ],
+  "preload": false,
+  "refresh": "30s",
+  "schemaVersion": 42,
+  "tags": [],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-12h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "TinyGS Passive 2 Overview",
+  "uid": "tinygs-passive2-overview",
+  "version": 7
+}

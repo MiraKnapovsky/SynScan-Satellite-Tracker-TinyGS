@@ -15,7 +15,7 @@ from synscan_common import clamp_el, goto_azel, open_port, send_cmd
 
 app = Flask(__name__)
 
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(__file__).resolve().parents[1]
 CONFIG = BASE_DIR / "synscan_config.json"
 STATUS = BASE_DIR / "synscan_status.json"
 STATE  = BASE_DIR / "state.json"
@@ -27,7 +27,7 @@ CSRF_FIELD = "csrf_token"
 WEB_USER = os.getenv("SYNSCAN_WEB_USER", "").strip()
 WEB_PASSWORD = os.getenv("SYNSCAN_WEB_PASSWORD", "").strip()
 if not WEB_PASSWORD:
-    raise SystemExit("Set SYNSCAN_WEB_PASSWORD before starting synscan_web.py")
+    raise SystemExit("Set SYNSCAN_WEB_PASSWORD before starting tracker/synscan_web.py")
 
 def _normalize_web_host(value: str) -> str:
     """Accept host or URL input and return plain host/IP for Flask bind."""
@@ -49,15 +49,15 @@ except ValueError as exc:
 
 TEMPLATE = r"""
 <!doctype html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>SynScan</title>
+  <title>SynScan Follow Sat</title>
   <style>
     body { font-family: sans-serif; max-width: 980px; margin: 40px auto; }
-    .card { padding: 14px; border: 1px solid #ddd; border-radius: 12px; margin: 14px 0; }
+    .card { padding: 14px; border: 1px solid #ddd; border-radius: 8px; margin: 14px 0; }
     .row { display: flex; gap: 10px; flex-wrap: wrap; }
-    .btn { display:inline-block; padding:10px 14px; border:1px solid #ccc; border-radius:10px; text-decoration:none; color:#111; background:#f8f8f8; }
+    .btn { display:inline-block; padding:10px 14px; border:1px solid #ccc; border-radius:8px; text-decoration:none; color:#111; background:#f8f8f8; }
     .btn:hover { background:#f0f0f0; }
     .danger { border-color:#d88; background:#fff3f3; }
     code { background:#f5f5f5; padding:2px 6px; border-radius:6px; }
@@ -69,18 +69,18 @@ TEMPLATE = r"""
   </style>
 </head>
 <body>
-  <h1>SynScan follow sat</h1>
+  <h1>SynScan Follow Sat</h1>
 
   <div class="card">
     <h2>Status (tracker)</h2>
     <div class="small" id="summary">?</div>
     <div class="kv" style="margin-top:10px;">
-      <div><b>Služba</b></div><div><span id="svc">?</span> / <span id="en">?</span></div>
-      <div><b>Režim</b></div><div id="ph">?</div>
-      <div><b>Cíl</b></div><div id="tgt">?</div>
+      <div><b>Service</b></div><div><span id="svc">?</span> / <span id="en">?</span></div>
+      <div><b>Mode</b></div><div id="ph">?</div>
+      <div><b>Target</b></div><div id="tgt">?</div>
       <div><b>Az / El </b></div><div><span id="az">?</span>° / <span id="el">?</span>°</div>
-      <div><b>Poslední update</b></div><div id="ts">?</div>
-      <div><b>Poslední příkaz</b></div><div><span id="cmd" class="mono">?</span> <span id="cmdts" class="small"></span></div>
+      <div><b>Last update</b></div><div id="ts">?</div>
+      <div><b>Last command</b></div><div><span id="cmd" class="mono">?</span> <span id="cmdts" class="small"></span></div>
     </div>
 
     <div class="row" style="margin-top:12px;">
@@ -100,7 +100,7 @@ TEMPLATE = r"""
     </div>
 
     <div class="small" style="margin-top:8px;">
-      Tracker zapisuje <code>{{ base_dir }}/synscan_status.json</code>.
+      Tracker writes <code>{{ base_dir }}/synscan_status.json</code>.
     </div>
   </div>
 
@@ -108,10 +108,10 @@ TEMPLATE = r"""
     <h2>State (TinyGS/MQTT)</h2>
     <div class="small" id="state_summary">?</div>
     <div class="kv" style="margin-top:10px;">
-      <div><b>Satelit</b></div><div id="st_sat">?</div>
+      <div><b>Satellite</b></div><div id="st_sat">?</div>
       <div><b>NORAD</b></div><div id="st_norad">?</div>
-      <div><b>Poslední update</b></div><div id="st_last">?</div>
-      <div><b>Frekvence / režim</b></div><div><span id="st_freq">?</span> MHz / <span id="st_mode">?</span></div>
+      <div><b>Last update</b></div><div id="st_last">?</div>
+      <div><b>Frequency / mode</b></div><div><span id="st_freq">?</span> MHz / <span id="st_mode">?</span></div>
       <div><b>BW / SF / CR</b></div><div><span id="st_bw">?</span> kHz / <span id="st_sf">?</span> / <span id="st_cr">?</span></div>
       <div><b>PL / PWR / gain</b></div><div><span id="st_pl">?</span> / <span id="st_pwr">?</span> / <span id="st_gain">?</span></div>
       <div><b>CRC / iIQ / fldro</b></div><div><span id="st_crc">?</span> / <span id="st_iIQ">?</span> / <span id="st_fldro">?</span></div>
@@ -119,72 +119,84 @@ TEMPLATE = r"""
     </div>
 
     <div class="small" style="margin-top:8px;">
-      Čte <code>{{ base_dir }}/state.json</code>.
+      Reads <code>{{ base_dir }}/state.json</code>.
     </div>
   </div>
 
   <div class="card">
-    <h2>Konfigurace (synscan_config.json)</h2>
+    <h2>Configuration (synscan_config.json)</h2>
     <form method="post">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <label>dummy (test bez montáže)</label>
+      <label>dummy (test mode without mount movement)</label>
       <input type="checkbox" name="dummy" {% if c.get('dummy') %}checked{% endif %}>
 
-      <label>port (RS-232 zařízení, např. /dev/ttyUSB0)</label>
+      <label>port (RS-232 device, for example /dev/ttyUSB0)</label>
       <input name="port" style="width:420px" value="{{ c.get('port','/dev/ttyUSB0') }}">
 
-      <label>lat (zeměpisná šířka)</label>
+      <label>lat (observer latitude)</label>
       <input name="lat" value="{{ c.get('lat',49.83) }}">
 
-      <label>lon (zeměpisná délka)</label>
+      <label>lon (observer longitude)</label>
       <input name="lon" value="{{ c.get('lon',18.17) }}">
 
-      <label>alt (nadmořská výška v m)</label>
+      <label>alt (observer altitude in meters)</label>
       <input name="alt" value="{{ c.get('alt',240) }}">
 
-      <label>min_el (min. elevace pro tracking)</label>
+      <label>min_el (minimum tracking elevation)</label>
       <input name="min_el" value="{{ c.get('min_el',10) }}">
 
-      <label>lead (predikční náskok v s)</label>
+      <label>lead (prediction lead time in seconds)</label>
       <input name="lead" value="{{ c.get('lead',0.8) }}">
 
-      <label>wrap_limit (kabelový limit azimut +/- °)</label>
+      <label>max_az_step (maximum azimuth per command step; 0 disables segmentation)</label>
+      <input name="max_az_step" value="{{ c.get('max_az_step', 0.0) }}">
+
+      <label>max_el_step (maximum elevation per command step; 0 disables segmentation)</label>
+      <input name="max_el_step" value="{{ c.get('max_el_step', 0.0) }}">
+
+      <label>wrap_limit (azimuth cable soft limit, +/- degrees)</label>
       <input name="wrap_limit" value="{{ c.get('wrap_limit',270.0) }}">
 
-      <label>wrap_margin (rezerva k wrap_limit v °)</label>
+      <label>wrap_margin (safety margin below wrap_limit in degrees)</label>
       <input name="wrap_margin" value="{{ c.get('wrap_margin',10.0) }}">
 
-      <label>plan_horizon (horizont predikce přeletu v s)</label>
+      <label>plan_horizon (pass prediction horizon in seconds)</label>
       <input name="plan_horizon" value="{{ c.get('plan_horizon',2400.0) }}">
 
-      <label>plan_step (krok predikce v s)</label>
+      <label>plan_step (prediction step in seconds)</label>
       <input name="plan_step" value="{{ c.get('plan_step',2.0) }}">
 
-      <label>az_home (bezpečný azimut pro odmotání)</label>
+      <label>az_home (safe azimuth for neutral/unwind positioning)</label>
       <input name="az_home" value="{{ c.get('az_home',0.0) }}">
 
+      <label>invert_elevation (send inverted elevation to the mount)</label>
+      <input type="checkbox" name="invert_elevation" {% if c.get('invert_elevation') %}checked{% endif %}>
+
+      <label>elevation_offset_deg (offset at 0°, linearly tapering to 0° at 90°)</label>
+      <input name="elevation_offset_deg" value="{{ c.get('elevation_offset_deg', 0.0) }}">
+
       <div class="row" style="margin-top:14px;">
-        <button class="btn" type="submit">Uložit + restart služby</button>
+        <button class="btn" type="submit">Save + restart service</button>
       </div>
     </form>
   </div>
 
   <div class="card">
-    <h2>Manuální ovládání rotátoru</h2>
-    <div class="small">Doporučeno: nejdřív zastavit službu, aby si nepřepisovala příkazy.</div>
+    <h2>Manual rotator control</h2>
+    <div class="small">Recommended: stop the tracker service first so it cannot overwrite manual commands.</div>
     <div class="kv" style="margin-top:10px;">
-      <div><b>Aktuální Az / El</b></div>
+      <div><b>Current Az / El</b></div>
       <div><span id="cur_az">?</span>° / <span id="cur_el">?</span>°</div>
       <div><b>Az</b></div>
       <div><input id="man_az" type="number" step="0.1" placeholder="0–360" disabled></div>
       <div><b>El</b></div>
       <div><input id="man_el" type="number" step="0.1" placeholder="0–90" disabled></div>
-      <div><b>Výsledek</b></div>
+      <div><b>Result</b></div>
       <div id="man_out" class="mono">-</div>
     </div>
     <div class="row" style="margin-top:12px;">
-      <button class="btn" type="button" onclick="toggleManual()">Odemknout zadávání</button>
-      <button class="btn" type="button" onclick="manualSend()">Poslat na montáž</button>
+      <button class="btn" type="button" onclick="toggleManual()">Unlock inputs</button>
+      <button class="btn" type="button" onclick="manualSend()">Send to mount</button>
       <button class="btn danger" type="button" onclick="manualStop()">Stop</button>
     </div>
   </div>
@@ -211,19 +223,19 @@ TEMPLATE = r"""
 
     function statusSummary(svc, s){
       if(!svc || svc.active !== 'active'){
-        return 'Služba neběží. Tracker neposílá příkazy na montáž.';
+        return 'Service is not running. The tracker is not sending commands to the mount.';
       }
       if(!s){
-        return 'Služba běží, ale zatím není vytvořený synscan_status.json.';
+        return 'Service is running, but synscan_status.json has not been created yet.';
       }
       const isCenter = (s.phase === 'center') || (s.do_center === true);
       if(isCenter){
-        return 'Surveillance režim: držím neutrální polohu.';
+        return 'Surveillance mode: holding neutral position.';
       }
       if(s.tracked_name){
-        return 'Sleduji satelit: ' + s.tracked_name + '.';
+        return 'Tracking satellite: ' + s.tracked_name + '.';
       }
-      return 'Služba běží, čekám na cíl.';
+      return 'Service is running, waiting for a target.';
     }
 
     function parseLastUpdateTime(t){
@@ -240,9 +252,9 @@ TEMPLATE = r"""
 
     function stateSummary(s){
       if(!s){
-        return 'state.json nenalezen nebo prázdný.';
+        return 'state.json was not found or is empty.';
       }
-      const sat = s.sat ? s.sat : '(bez satelitu)';
+      const sat = s.sat ? s.sat : '(no satellite)';
       const freq = (s.freq !== undefined && s.freq !== null) ? (s.freq + ' MHz') : '-';
       const mode = s.mode ? s.mode : '-';
       const last = s.last_update ? s.last_update : '-';
@@ -251,7 +263,7 @@ TEMPLATE = r"""
       if(t){
         const ageSec = Math.round((Date.now() - t.getTime()) / 1000);
         if(ageSec >= 120){
-          extra = ' POZOR: update stare (' + ageSec + ' s).';
+          extra = ' WARNING: stale update (' + ageSec + ' s).';
         }
       }
       return 'TinyGS: ' + sat + ', ' + freq + ' / ' + mode + ', update: ' + last + '.' + extra;
@@ -272,17 +284,18 @@ TEMPLATE = r"""
         const r = await fetch('/api/manual/goto', {
           method: 'POST',
           headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken},
+          credentials: 'same-origin',
           body: JSON.stringify({az: az, el: el}),
         });
         const j = await r.json();
         if(!r.ok || !j.ok){
-          setText('man_out', j.error || 'Chyba.');
+          setText('man_out', j.error || 'Error.');
           return;
         }
-        const out = 'Odesláno: Az ' + j.az_deg + '°, El ' + j.el_deg + '°';
+        const out = 'Sent: Az ' + j.az_deg + '°, El ' + j.el_deg + '°';
         setText('man_out', out);
       }catch(e){
-        setText('man_out', 'Chyba při odeslání.');
+        setText('man_out', 'Send failed.');
       }
     }
 
@@ -291,21 +304,22 @@ TEMPLATE = r"""
         const r = await fetch('/api/manual/stop', {
           method: 'POST',
           headers: {'X-CSRF-Token': csrfToken},
+          credentials: 'same-origin',
         });
         const j = await r.json();
         if(!r.ok || !j.ok){
-          setText('man_out', j.error || 'Chyba.');
+          setText('man_out', j.error || 'Error.');
           return;
         }
-        setText('man_out', 'Stop odeslán.');
+        setText('man_out', 'Stop sent.');
       }catch(e){
-        setText('man_out', 'Chyba při odeslání stop.');
+        setText('man_out', 'Stop command failed.');
       }
     }
 
     async function refreshStatus(){
       try{
-        const r = await fetch('/api/status', {cache:'no-store'});
+        const r = await fetch('/api/status', {cache:'no-store', credentials:'same-origin'});
         const j = await r.json();
 
         const svc = j.service || {};
@@ -314,7 +328,7 @@ TEMPLATE = r"""
 
         const s = j.status;
         if(!s){
-          setText('ph','-'); setText('tgt','(zatím žádný synscan_status.json)');
+          setText('ph','-'); setText('tgt','(no synscan_status.json yet)');
           setText('az','-'); setText('el','-');
           setText('ts','-');
           setText('cmd','-'); setText('cmdts','');
@@ -325,7 +339,7 @@ TEMPLATE = r"""
         setText('ph', s.phase ?? '-');
         const isCenter = (s.phase === 'center') || (s.do_center === true);
 
-        const tgt = (s.phase === 'no_target') ? '(nic)' : (isCenter ? '[SURVEILLANCE]' : (s.tracked_name ? s.tracked_name : '(nic)'));
+        const tgt = (s.phase === 'no_target') ? '(none)' : (isCenter ? '[SURVEILLANCE]' : (s.tracked_name ? s.tracked_name : '(none)'));
         setText('tgt', tgt);
 
         setNum('az',  s.az_deg, 1);
@@ -339,18 +353,18 @@ TEMPLATE = r"""
         setText('summary', statusSummary(svc, s));
       }catch(e){
         setText('svc','ERROR');
-        setText('summary', 'Chyba při načítání statusu.');
+        setText('summary', 'Failed to load status.');
       }
     }
 
     async function refreshState(){
       try{
-        const r = await fetch('/api/state', {cache:'no-store'});
+        const r = await fetch('/api/state', {cache:'no-store', credentials:'same-origin'});
         const j = await r.json();
         const s = j.state;
 
         if(!s){
-          setText('st_sat','(nenalezeno state.json)');
+          setText('st_sat','(state.json not found)');
           setText('st_norad','-');
           setText('st_last','-');
           setText('st_freq','-');
@@ -394,7 +408,7 @@ TEMPLATE = r"""
         setText('state_summary', stateSummary(s));
       }catch(e){
         setText('st_sat','ERROR');
-        setText('state_summary', 'Chyba při načítání state.json.');
+        setText('state_summary', 'Failed to load state.json.');
       }
     }
 
@@ -518,6 +532,17 @@ def _get_port() -> str:
     cfg = load_cfg()
     return cfg.get("port") or "/dev/ttyUSB0"
 
+def _invert_elevation_enabled() -> bool:
+    cfg = load_cfg()
+    return bool(cfg.get("invert_elevation", False))
+
+def _elevation_offset_deg() -> float:
+    cfg = load_cfg()
+    try:
+        return float(cfg.get("elevation_offset_deg", 0.0))
+    except (TypeError, ValueError):
+        return 0.0
+
 @app.get("/api/status")
 def api_status():
     return jsonify({"service": service_state(), "status": load_status()})
@@ -533,21 +558,27 @@ def api_manual_goto():
         az_user = float(data.get("az", ""))
         el_user = float(data.get("el", ""))
     except Exception:
-        return jsonify({"ok": False, "error": "Neplatné Az/El."}), 400
+        return jsonify({"ok": False, "error": "Invalid Az/El."}), 400
 
     if not math.isfinite(az_user) or not math.isfinite(el_user):
-        return jsonify({"ok": False, "error": "Az/El musí být konečné číslo."}), 400
+        return jsonify({"ok": False, "error": "Az/El must be finite numbers."}), 400
     if not (0.0 <= az_user <= 360.0):
-        return jsonify({"ok": False, "error": "Az musí být v rozsahu 0..360°."}), 400
+        return jsonify({"ok": False, "error": "Az must be in the 0..360° range."}), 400
     if not (0.0 <= el_user <= 90.0):
-        return jsonify({"ok": False, "error": "El musí být v rozsahu 0..90°."}), 400
+        return jsonify({"ok": False, "error": "El must be in the 0..90° range."}), 400
 
     try:
         el_send = clamp_el(el_user)
         with open_port(_get_port()) as ser:
-            cmd, ok = goto_azel(ser, az_user, el_send)
+            cmd, ok = goto_azel(
+                ser,
+                az_user,
+                el_send,
+                invert_elevation=_invert_elevation_enabled(),
+                elevation_offset_deg=_elevation_offset_deg(),
+            )
         if not ok:
-            return jsonify({"ok": False, "error": "Montáž neodpověděla."}), 500
+            return jsonify({"ok": False, "error": "Mount did not respond."}), 500
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
@@ -591,13 +622,15 @@ def config_post():
         try:
             return float(raw)
         except (TypeError, ValueError) as exc:
-            raise ValueError(f"Neplatná hodnota pole '{name}': {raw!r}") from exc
+            raise ValueError(f"Invalid value for field '{name}': {raw!r}") from exc
 
     current_cfg = load_cfg()
     tle_fixed = str(current_cfg.get("tle") or (BASE_DIR / "satellites.tle"))
     state_fixed = str(current_cfg.get("state") or (BASE_DIR / "state.json"))
     status_file_fixed = str(current_cfg.get("status_file") or (BASE_DIR / "synscan_status.json"))
     interval_fixed = float(current_cfg.get("interval", 0.5))
+    max_az_step_fixed = float(current_cfg.get("max_az_step", 0.0))
+    max_el_step_fixed = float(current_cfg.get("max_el_step", 0.0))
     status_every_fixed = float(current_cfg.get("status_every", 1.0))
 
     try:
@@ -612,11 +645,15 @@ def config_post():
             "min_el": parse_float_field("min_el", 10.0),
             "interval": interval_fixed,
             "lead": parse_float_field("lead", 0.8),
+            "max_az_step": parse_float_field("max_az_step", max_az_step_fixed),
+            "max_el_step": parse_float_field("max_el_step", max_el_step_fixed),
             "wrap_limit": parse_float_field("wrap_limit", 270.0),
             "wrap_margin": parse_float_field("wrap_margin", 10.0),
             "plan_horizon": parse_float_field("plan_horizon", 2400.0),
             "plan_step": parse_float_field("plan_step", 2.0),
             "az_home": parse_float_field("az_home", 0.0),
+            "invert_elevation": (request.form.get("invert_elevation") == "on"),
+            "elevation_offset_deg": parse_float_field("elevation_offset_deg", 0.0),
             "status_file": status_file_fixed,
             "status_every": status_every_fixed,
         }
@@ -627,7 +664,7 @@ def config_post():
     try:
         service_restart()
     except RuntimeError as exc:
-        return f"Konfigurace uložena, ale restart služby selhal: {exc}", 500
+        return f"Configuration was saved, but service restart failed: {exc}", 500
     return redirect(url_for("config_get"))
 
 @app.post("/svc/start")

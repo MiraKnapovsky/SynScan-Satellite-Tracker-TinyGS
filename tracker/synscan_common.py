@@ -52,8 +52,38 @@ def clamp_el(angle_deg: float) -> float:
     return max(0.0, min(90.0, angle_deg))
 
 
-def goto_azel(ser: Optional[serial.Serial], az_deg: float, el_deg: float, dummy: bool = False) -> Tuple[str, bool]:
-    cmd = f"B{deg_to_hex16(az_deg)},{deg_to_hex16(el_deg)}"
+def apply_elevation_offset(angle_deg: float, offset_deg: float = 0.0) -> float:
+    angle = clamp_el(angle_deg)
+    offset = float(offset_deg) * max(0.0, 1.0 - (angle / 90.0))
+    return clamp_el(angle + offset)
+
+
+def user_el_to_mount_el(
+    angle_deg: float,
+    *,
+    invert_elevation: bool = False,
+    elevation_offset_deg: float = 0.0,
+) -> float:
+    angle = apply_elevation_offset(angle_deg, elevation_offset_deg)
+    if invert_elevation:
+        return 90.0 - angle
+    return angle
+
+
+def goto_azel(
+    ser: Optional[serial.Serial],
+    az_deg: float,
+    el_deg: float,
+    dummy: bool = False,
+    invert_elevation: bool = False,
+    elevation_offset_deg: float = 0.0,
+) -> Tuple[str, bool]:
+    el_send = user_el_to_mount_el(
+        el_deg,
+        invert_elevation=invert_elevation,
+        elevation_offset_deg=elevation_offset_deg,
+    )
+    cmd = f"B{deg_to_hex16(az_deg)},{deg_to_hex16(el_send)}"
     rsp = send_cmd(ser, cmd, dummy=dummy)
     ok = dummy or rsp.endswith("#")
     return cmd, ok

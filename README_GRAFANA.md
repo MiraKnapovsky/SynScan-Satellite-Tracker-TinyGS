@@ -1,33 +1,44 @@
-# Grafana Dashboard Guide (TinyGS / Helix Rotator 433MHz)
+# Grafana Dashboard Guide (TinyGS Active / Passive 1 / Passive 2)
 
 This document explains what is in the Grafana dashboard and how each chart is calculated.
 
-Dashboard file:
-- `dashboards/tinygs-overview.json`
-- `dashboards/tinygs-qfh-overview.json`
+Core dashboard files:
+- `dashboards/tinygs-active-overview.json`
+- `dashboards/tinygs-passive1-overview.json`
+- `dashboards/tinygs-passive2-overview.json`
 
 Provisioned Grafana target:
-- `/var/lib/grafana/dashboards/tinygs-overview.json`
-- `/var/lib/grafana/dashboards/tinygs-qfh-overview.json`
+- `/var/lib/grafana/dashboards/tinygs-active-overview.json`
+- `/var/lib/grafana/dashboards/tinygs-passive1-overview.json`
+- `/var/lib/grafana/dashboards/tinygs-passive2-overview.json`
 
-Current dashboard metadata:
-- Title: `Helix Rotator 433MHz`
-- UID: `tinygs-overview`
-- Version: `87`
+Active dashboard metadata:
+- Title: `TinyGS Active Overview`
+- UID: `tinygs-active-overview`
+- Version: `112`
+- Bucket: `tinygs_active`
 - Default time range: `now-12h` to `now`
 - Refresh: every `30s`
 
-QFH dashboard metadata:
-- Title: `QFH 433MHz`
-- UID: `tinygs-qfh-overview`
-- Bucket: `tinygs_kna0047qfh`
+Passive 1 dashboard metadata:
+- Title: `TinyGS Passive 1 Overview`
+- UID: `tinygs-passive1-overview`
+- Version: `97`
+- Bucket: `tinygs_passive1`
+
+Passive 2 dashboard metadata:
+- Title: `TinyGS Passive 2 Overview`
+- UID: `tinygs-passive2-overview`
+- Version: `7`
+- Bucket: `tinygs_passive2`
 
 ## 1) Data Model
 
-The Helix dashboard reads from bucket `tinygs`.
-The QFH dashboard reads from bucket `tinygs_kna0047qfh`.
+The Active dashboard reads from bucket `tinygs_active`.
+The Passive 1 dashboard reads from bucket `tinygs_passive1`.
+The Passive 2 dashboard reads from bucket `tinygs_passive2`.
 
-Both dashboards use these measurements:
+All dashboards use these measurements:
 
 - `tinygs_state`
   - Source: TinyGS `cmnd/begine` messages.
@@ -204,15 +215,18 @@ Counts can differ between packet panels and pass panels because:
 Recommended workflow:
 
 1. Edit:
-   - `synscan_tinygs_tracker/dashboards/tinygs-overview.json`
-   - `synscan_tinygs_tracker/dashboards/tinygs-qfh-overview.json`
+   - `synscan_tinygs_tracker/dashboards/tinygs-active-overview.json`
+   - `synscan_tinygs_tracker/dashboards/tinygs-passive1-overview.json`
+   - `synscan_tinygs_tracker/dashboards/tinygs-passive2-overview.json`
 2. Validate JSON:
-   - `python3 -m json.tool synscan_tinygs_tracker/dashboards/tinygs-overview.json > /dev/null`
-   - `python3 -m json.tool synscan_tinygs_tracker/dashboards/tinygs-qfh-overview.json > /dev/null`
+   - `python3 -m json.tool synscan_tinygs_tracker/dashboards/tinygs-active-overview.json > /dev/null`
+   - `python3 -m json.tool synscan_tinygs_tracker/dashboards/tinygs-passive1-overview.json > /dev/null`
+   - `python3 -m json.tool synscan_tinygs_tracker/dashboards/tinygs-passive2-overview.json > /dev/null`
 3. Increment `version` in dashboard JSON.
 4. Deploy to Grafana provisioning path:
-   - `sudo cp synscan_tinygs_tracker/dashboards/tinygs-overview.json /var/lib/grafana/dashboards/tinygs-overview.json`
-   - `sudo cp synscan_tinygs_tracker/dashboards/tinygs-qfh-overview.json /var/lib/grafana/dashboards/tinygs-qfh-overview.json`
+   - `sudo cp synscan_tinygs_tracker/dashboards/tinygs-active-overview.json /var/lib/grafana/dashboards/tinygs-active-overview.json`
+   - `sudo cp synscan_tinygs_tracker/dashboards/tinygs-passive1-overview.json /var/lib/grafana/dashboards/tinygs-passive1-overview.json`
+   - `sudo cp synscan_tinygs_tracker/dashboards/tinygs-passive2-overview.json /var/lib/grafana/dashboards/tinygs-passive2-overview.json`
 5. Refresh Grafana dashboard page.
 
 ## 9) Quick Troubleshooting

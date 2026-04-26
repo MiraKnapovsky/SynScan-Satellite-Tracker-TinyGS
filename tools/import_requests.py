@@ -9,7 +9,7 @@ from typing import List, Tuple
 import requests
 
 TLE_URL = "https://api.tinygs.com/v1/tinygs_supported.txt"
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(__file__).resolve().parents[1]
 OUTPUT_FILE = BASE_DIR / "satellites.tle"
 
 
@@ -19,7 +19,7 @@ def parse_tle_blocks(raw_text: str) -> Tuple[List[str], int, int]:
     kept = 0
     skipped = 0
 
-    # Očekáváme bloky po 3 řádcích: NAME, "1 ...", "2 ..."
+    # TinyGS serves TLE blocks as NAME, line 1, line 2.
     for idx in range(0, len(lines) - 2, 3):
         name, l1, l2 = lines[idx], lines[idx + 1], lines[idx + 2]
         if l1.startswith("1 ") and l2.startswith("2 "):
@@ -48,13 +48,13 @@ def fetch_and_save_all() -> None:
         output_text = "\n".join(lines) + ("\n" if lines else "")
         atomic_write_text(OUTPUT_FILE, output_text)
         print(
-            f"Aktualizováno: {kept} satelitů uloženo do {OUTPUT_FILE} "
-            f"(přeskočeno bloků: {skipped})"
+            f"Updated: {kept} satellites saved to {OUTPUT_FILE} "
+            f"(skipped blocks: {skipped})"
         )
     except requests.RequestException as exc:
-        print(f"Chyba při stahování TLE: {exc}")
+        print(f"TLE download failed: {exc}")
     except OSError as exc:
-        print(f"Chyba při ukládání TLE: {exc}")
+        print(f"TLE save failed: {exc}")
 
 
 if __name__ == "__main__":

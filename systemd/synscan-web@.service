@@ -10,7 +10,7 @@ WorkingDirectory=/home/%i/synscan_tinygs_tracker
 EnvironmentFile=/home/%i/synscan_tinygs_tracker/synscan_web.env
 Environment=PYTHONUNBUFFERED=1
 Environment=SYNSCAN_FOLLOW_SERVICE=synscan-follow-sat@%i.service
-ExecStart=/home/%i/synscan_tinygs_tracker/tinygs_mqtt/env/bin/python /home/%i/synscan_tinygs_tracker/synscan_web.py
+ExecStart=/home/%i/synscan_tinygs_tracker/tinygs_mqtt/env/bin/python /home/%i/synscan_tinygs_tracker/tracker/synscan_web.py
 Restart=on-failure
 RestartSec=5
 
