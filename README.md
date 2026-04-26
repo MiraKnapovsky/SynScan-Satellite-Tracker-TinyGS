@@ -179,6 +179,18 @@ If you set `SYNSCAN_WEB_HOST=0.0.0.0`, open `http://<debian-host-ip>:8080/config
 
 ![SynScan web UI screenshot](docs/synscan_tracker.png)
 
+The web UI is English-only and currently provides:
+
+- live tracker status from `synscan_status.json`
+- live TinyGS/MQTT state from `state.json`
+- tracker service start/stop/restart buttons
+- an editable safe subset of `synscan_config.json`
+- manual rotator goto/stop controls for maintenance and testing
+- a logs view backed by `journalctl -u <tracker-service>`
+
+The form intentionally preserves advanced/path fields that are not shown in the UI.
+Service buttons require the web process to have permission to run `systemctl` for the configured tracker unit.
+
 11. Optional: install the template systemd units after the manual test passes:
 
 ```bash
@@ -230,6 +242,15 @@ sudo systemctl status mqtt_tinygs_listen@$(whoami).service
 - Measurement `tinygs_frame`: data from topic `cmnd/frame/0` (satellite, RSSI, SNR, freq error, confirmed/crc_error).
 
 ![Grafana dashboard screenshot](docs/grafana.png)
+
+Included dashboards:
+
+- `dashboards/tinygs-active-overview.json`
+- `dashboards/tinygs-passive1-overview.json`
+- `dashboards/tinygs-passive2-overview.json`
+
+Each station also has `no-tianqi`, `only-tianqi`, and `common-no-tianqi` dashboard variants.
+See `README_GRAFANA.md` for panel definitions and deployment steps.
 
 Configuration is via env vars (already loaded by `mqtt_tinygs_listen@.service`):
 
@@ -446,6 +467,36 @@ Ready-made Grafana dashboard:
 
 - `dashboards/tinygs-passive2-overview.json`
 
+## CSV Exports
+
+Two helper scripts export InfluxDB data to local CSV files:
+
+- `export_influx_csv.py`: frame telemetry rows from `tinygs_frame`
+- `export_not_confirmed_passes.py`: pass-level `CONFIRMED` and `NOT_CONFIRMED` summaries
+
+Both scripts read InfluxDB connection settings from these local env files:
+
+- `mqtt_tinygs_listen.env` for source `active`
+- `mqtt_tinygs_listen_passive1.env` for source `passive1`
+- `mqtt_tinygs_listen_passive2.env` for source `passive2`
+
+Example:
+
+```bash
+python3 export_influx_csv.py \
+  --start "2026-04-16 11:00" \
+  --stop "2026-04-18 12:00" \
+  --sources active,passive1,passive2
+
+python3 export_not_confirmed_passes.py \
+  --start "2026-04-16 11:00" \
+  --stop "2026-04-18 12:00" \
+  --sources all
+```
+
+By default, output goes under `exports/<start>_to_<stop>_<timezone>/`.
+Generated export directories are ignored by git.
+
 ## `synscan_config.json` Keys
 
 - `dummy`: `true` to log commands only (no serial writes).
@@ -465,6 +516,7 @@ Ready-made Grafana dashboard:
 Web UI note:
 - Some advanced/path fields are intentionally hidden in `/config` (`tle`, `state`, `status_file`, `interval`, `status_every`).
 - Hidden fields are preserved from existing `synscan_config.json` when saving.
+- `synscan_follow_sat.py` also has CLI-only defaults such as `--min-step` and `--center-el`; the default systemd runner currently uses those defaults.
 
 ## Web Auth
 
